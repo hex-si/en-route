@@ -2,11 +2,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ phone: string }> }
+  request: Request
 ) {
   const supabase = createAdminClient();
-  const { phone } = await params;
+  const { searchParams } = new URL(request.url);
+  const phone = searchParams.get("phone");
+  if (!phone) return NextResponse.json({ error: "Phone required" }, { status: 400 });
   const { data, error } = await supabase.from("users").select("*").eq("phone", phone).single();
   if (error) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(data);
