@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:cloudflare": "npm run build && npx @opennextjs/cloudflare build",
+    "build:cloudflare": "npm run build && npx @opennextjs/cloudflare build --skipWranglerConfigCheck",
     "start": "next start",
     "lint": "next lint",
     "preview": "npx wrangler dev",
