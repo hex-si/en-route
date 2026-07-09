@@ -1,4 +1,6 @@
 {
   "name": "en-route",
-  "pages_build_output_dir": ".open-next"
+  "pages_build_output_dir": ".open-next",
+  "compatibility_date": "2026-07-09",
+  "compatibility_flags": ["nodejs_compat"]
 }
