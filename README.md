@@ -147,13 +147,9 @@ en-route/
 
 ---
 
-## 🔑 Admin Credentials
+## 🔑 Admin Access
 
-| Field | Value |
-|-------|-------|
-| Phone | `7005498122` |
-| Password | `Enroute@2026` |
-| Security Answer | `extranar` |
+Admin credentials are stored securely in the database with hashed passwords. Contact the project owner for access.
 
 ---
 
