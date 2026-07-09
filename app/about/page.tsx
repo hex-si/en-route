@@ -53,6 +53,9 @@ export default function AboutPage() {
         <p className="text-center text-xs text-[var(--text-secondary)] pt-4">
           A Hashtag Dropee Initiative — eX Holdings
         </p>
+        <p className="text-center text-xs text-[var(--text-secondary)]">
+          Developer: Jihal Shimray | Deployed on Cloudflare
+        </p>
 
         <div className="flex items-center justify-center gap-4 mt-4 text-xs">
           <Link href="/about" className="text-[var(--text-secondary)] hover:text-[var(--primary)] transition">

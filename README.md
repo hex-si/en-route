@@ -167,12 +167,12 @@ Admin credentials are stored securely in the database with hashed passwords. Con
 
 ## 🌐 Deployment
 
-This project is deployed on **Vercel** at [discoverukhrul.site](https://discoverukhrul.site)
+This project is deployed on **Cloudflare** at [discoverukhrul.site](https://discoverukhrul.site)
 
 To deploy your own instance:
 
 1. Fork this repository
-2. Connect to Vercel
+2. Connect to Cloudflare Pages
 3. Add environment variables
 4. Run migrations on your Supabase project
 5. Deploy
@@ -210,6 +210,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 <div align="center">
 
 **Built with ❤️ for Ukhrul**
+
+**Developer:** Jihal Shimray | **Deployed on:** Cloudflare
 
 [↑ Back to Top](#-en-route)
 

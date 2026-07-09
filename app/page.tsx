@@ -411,6 +411,9 @@ export default function HomePage() {
         <p className="text-center text-xs text-[var(--text-secondary)] pt-4">
           A Hashtag Dropee Initiative — eX Holdings
         </p>
+        <p className="text-center text-xs text-[var(--text-secondary)]">
+          Developer: Jihal Shimray | Deployed on Cloudflare
+        </p>
 
         <a
           href="https://instagram.com/hashtagdropee"

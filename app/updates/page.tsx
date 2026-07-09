@@ -107,6 +107,9 @@ export default function UpdatesPage() {
         <p className="text-center text-xs text-[var(--text-secondary)] pt-8">
           A Hashtag Dropee Initiative — eX Holdings
         </p>
+        <p className="text-center text-xs text-[var(--text-secondary)]">
+          Developer: Jihal Shimray | Deployed on Cloudflare
+        </p>
       </div>
     </main>
   );
