@@ -3,6 +3,11 @@
 .env.local
 .env.*.local
 .next/
-out/
+.vercel/
+.out/
+.out/
+.wrangler/
+.cache/
+.open-next/
 *.tsbuildinfo
 next-env.d.ts
