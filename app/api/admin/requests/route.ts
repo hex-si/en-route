@@ -1,0 +1,38 @@
+﻿import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+const allowedFields = ["full_name", "phone", "maps_link", "location_desc", "photos"];
+
+export async function GET() {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("update_requests")
+    .select("*, users(full_name, phone)")
+    .order("created_at", { ascending: false });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ requests: data });
+}
+
+export async function PATCH(request: Request) {
+  const { id, status } = await request.json();
+  const supabase = createAdminClient();
+
+  const { data: req, error: fetchError } = await supabase
+    .from("update_requests")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
+
+  if (status === "approved" && allowedFields.includes(req.field)) {
+    await supabase.from("users").update({ [req.field]: req.new_value }).eq("id", req.user_id);
+  }
+
+  await supabase
+    .from("update_requests")
+    .update({ status, resolved_at: new Date().toISOString() })
+    .eq("id", id);
+
+  return NextResponse.json({ ok: true });
+}
