@@ -209,7 +209,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 <div align="center">
 
-**Built with ❤️ for Ukhrul**
+**Built for Ukhrul**
 
 **Developer:** Jihal Shimray | **Deployed on:** Cloudflare
 
