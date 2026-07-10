@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, MessageCircle, CheckCircle, Clock, AlertCircle, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, ExternalLink, MessageCircle, CheckCircle, Clock, AlertCircle, RefreshCw, Eye, EyeOff, Pencil, Trash2, Send, X, Save } from "lucide-react";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
@@ -70,12 +70,22 @@ export default function AdminUserDetailPage() {
   const [zoneInput, setZoneInput] = useState("");
   const [savingZone, setSavingZone] = useState(false);
 
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editMapsLink, setEditMapsLink] = useState("");
+  const [editLocationDesc, setEditLocationDesc] = useState("");
+  const [editHouseType, setEditHouseType] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/users/${id}`);
     if (res.ok) {
       const data = await res.json();
       setUser(data);
-      // Fetch zone name
       if (data.zone_id) {
         const { createClient } = await import("@/lib/supabase/client");
         const supabase = createClient();
@@ -88,8 +98,6 @@ export default function AdminUserDetailPage() {
       const memberData = await memberRes.json();
       setMembers(memberData.members || []);
     }
-
-    // Fetch referrals (people this user referred)
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -97,17 +105,14 @@ export default function AdminUserDetailPage() {
         .from("referrals")
         .select("id, referred_user_id, created_at")
         .eq("referrer_id", id);
-      
       if (refs && refs.length > 0) {
         const userIds = refs.map(r => r.referred_user_id);
         const { data: referredUsers } = await supabase
           .from("users")
           .select("id, full_name, phone")
           .in("id", userIds);
-        
         const userMap: Record<string, { full_name: string; phone: string }> = {};
         referredUsers?.forEach(u => { userMap[u.id] = u; });
-        
         setReferrals(refs.map(r => ({
           id: r.id,
           referred_user_id: r.referred_user_id,
@@ -121,12 +126,10 @@ export default function AdminUserDetailPage() {
     } catch {
       setReferrals([]);
     }
-
     setLoading(false);
   }, [id]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-
   useEffect(() => {
     const interval = setInterval(() => { fetchData(); }, 10000);
     return () => clearInterval(interval);
@@ -219,11 +222,12 @@ export default function AdminUserDetailPage() {
         return;
       }
 
-      const { error } = await supabase
-        .from("users")
-        .update({ zone_id: zone.id, household_registration_id: regId })
-        .eq("id", id);
-      if (error) {
+      const res = await fetch(`/api/users/${id}/update`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zone_id: zone.id, household_registration_id: regId }),
+      });
+      if (!res.ok) {
         toast.error("Failed to save");
         setSavingZone(false);
         return;
@@ -231,11 +235,100 @@ export default function AdminUserDetailPage() {
 
       setUser((u) => u ? { ...u, zone_id: zone.id, household_registration_id: regId } : null);
       setZoneName(zoneNameVal);
+      setZoneInput("");
       toast.success("Zone and Household ID assigned!");
     } catch {
       toast.error("Something went wrong");
     } finally {
       setSavingZone(false);
+    }
+  };
+
+  const startEditing = () => {
+    if (!user) return;
+    setEditName(user.full_name);
+    setEditPhone(user.phone);
+    setEditMapsLink(user.maps_link || "");
+    setEditLocationDesc(user.location_desc || "");
+    setEditHouseType(user.house_type || "");
+    setEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/users/${id}/update`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: editName,
+          phone: editPhone,
+          maps_link: editMapsLink,
+          location_desc: editLocationDesc,
+          house_type: editHouseType || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setUser((u) => u ? {
+        ...u,
+        full_name: editName,
+        phone: editPhone,
+        maps_link: editMapsLink,
+        location_desc: editLocationDesc,
+        house_type: editHouseType || null,
+      } : null);
+      setEditing(false);
+      toast.success("User updated");
+    } catch {
+      toast.error("Failed to update user");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleSendFillUpForm = () => {
+    if (!user) return;
+    const phone = toWhatsAppPhone(user.phone);
+    const siteUrl = "https://discoverukhrul.site";
+    const message = encodeURIComponent(
+      `Hi ${user.full_name},\n\n` +
+      `This is the En-Route team (Hashtag Dropee). Your household address registration is incomplete.\n\n` +
+      `Please update your profile to ensure accurate delivery mapping:\n\n` +
+      `${siteUrl}/dashboard\n\n` +
+      `What to check:\n` +
+      `• Your name and phone number\n` +
+      `• Google Maps pin location\n` +
+      `• Location description\n` +
+      `• House photos (front view)\n` +
+      `• Zone assignment\n\n` +
+      `Your registration ID: ${user.household_registration_id || "Not assigned yet"}\n\n` +
+      `Thank you!\n— Hashtag Dropee Team`
+    );
+    window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
+    toast.success("WhatsApp opened with fill-up form message");
+  };
+
+  const handleDeleteUser = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/users/${id}/delete`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed");
+      toast.success("User deleted");
+      router.push("/admin/users");
+    } catch {
+      toast.error("Failed to delete user");
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteMember = async (memberId: string) => {
+    try {
+      const res = await fetch(`/api/users/${id}/members/${memberId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed");
+      setMembers((m) => m.filter((mem) => mem.id !== memberId));
+      toast.success("Member removed");
+    } catch {
+      toast.error("Failed to remove member");
     }
   };
 
@@ -270,6 +363,27 @@ export default function AdminUserDetailPage() {
             <RefreshCw size={14} />
           </Button>
         </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <Button size="sm" onClick={startEditing}>
+          <Pencil size={14} className="mr-1" /> Edit User
+        </Button>
+        <Button size="sm" variant="secondary" onClick={handleSendFillUpForm}>
+          <Send size={14} className="mr-1" /> Send Fill-Up Form
+        </Button>
+        <a
+          href={`https://wa.me/${toWhatsAppPhone(user.phone)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-green-600 transition"
+        >
+          <MessageCircle size={14} /> WhatsApp
+        </a>
+        <Button size="sm" variant="secondary" onClick={() => setShowDeleteConfirm(true)} className="text-red-600 hover:text-red-700 hover:bg-red-50">
+          <Trash2 size={14} className="mr-1" /> Delete
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -323,42 +437,40 @@ export default function AdminUserDetailPage() {
         </Card>
 
         <Card>
-          <CardHeader><h2 className="font-semibold text-sm">Contact</h2></CardHeader>
+          <CardHeader><h2 className="font-semibold text-sm">Contact & Members ({members.length})</h2></CardHeader>
           <CardContent className="space-y-3">
-            <a
-              href={`https://wa.me/${toWhatsAppPhone(user.phone)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-green-500 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-green-600 transition"
-            >
-              <MessageCircle size={16} /> Open WhatsApp
-            </a>
-            {members.length > 0 && (
-              <div className="pt-2 border-t border-[var(--border)]">
-                <p className="text-xs text-[var(--text-secondary)] mb-2">Household Members</p>
-                <div className="space-y-1.5">
-                  {members.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        {member.name}
-                        {member.promoted_user_id && (
-                          <span className="text-[10px] text-green-700 bg-green-50 border border-green-200 font-medium px-1.5 py-0.5 rounded-full">
-                            Registered
-                          </span>
-                        )}
-                      </span>
+            {members.length > 0 ? (
+              <div className="space-y-1.5">
+                {members.map((member) => (
+                  <div key={member.id} className="flex items-center justify-between text-sm bg-gray-50 rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span>{member.name}</span>
+                      {member.promoted_user_id && (
+                        <span className="text-[10px] text-green-700 bg-green-50 border border-green-200 font-medium px-1.5 py-0.5 rounded-full">
+                          Registered
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
                       <a
-                         href={`https://wa.me/${toWhatsAppPhone(member.phone)}`}
+                        href={`https://wa.me/${toWhatsAppPhone(member.phone)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-[var(--primary)] text-xs hover:underline"
                       >
                         {member.phone}
                       </a>
+                      {!member.promoted_user_id && (
+                        <button onClick={() => handleDeleteMember(member.id)} className="text-red-500 hover:text-red-700 p-1">
+                          <Trash2 size={12} />
+                        </button>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
+            ) : (
+              <p className="text-sm text-[var(--text-secondary)]">No household members</p>
             )}
           </CardContent>
         </Card>
@@ -393,6 +505,13 @@ export default function AdminUserDetailPage() {
                     Assign
                   </Button>
                 </div>
+              </div>
+            )}
+            {user.household_registration_id && zoneName && (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+                <p className="text-xs font-medium text-green-800">Household ID Assigned</p>
+                <p className="text-sm font-mono font-medium text-green-700 mt-1">{user.household_registration_id}</p>
+                <p className="text-xs text-green-600 mt-0.5">Zone: {zoneName}</p>
               </div>
             )}
             <div className="flex items-center justify-between">
@@ -438,7 +557,6 @@ export default function AdminUserDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Referrals */}
         <Card>
           <CardHeader>
             <h2 className="font-semibold text-sm">Referrals ({referrals.length})</h2>
@@ -475,6 +593,51 @@ export default function AdminUserDetailPage() {
         </Card>
       </div>
 
+      {/* Edit Modal */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-5" onClick={() => setEditing(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-base">Edit User</h3>
+              <button onClick={() => setEditing(false)} className="p-1 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] mb-1 block">Full Name</label>
+                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] mb-1 block">Phone</label>
+                <input type="text" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] mb-1 block">Google Maps Link</label>
+                <input type="text" value={editMapsLink} onChange={(e) => setEditMapsLink(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] mb-1 block">Location Description</label>
+                <textarea value={editLocationDesc} onChange={(e) => setEditLocationDesc(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 resize-none" />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] mb-1 block">House Type</label>
+                <select value={editHouseType} onChange={(e) => setEditHouseType(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 bg-white">
+                  <option value="">Not set</option>
+                  <option value="owned">Owned</option>
+                  <option value="rent">Rented</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <Button size="sm" variant="secondary" onClick={() => setEditing(false)} className="flex-1">Cancel</Button>
+              <Button size="sm" onClick={handleSaveEdit} loading={savingEdit} className="flex-1">
+                <Save size={14} className="mr-1" /> Save
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Clarification Modal */}
       {showClarificationModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-5" onClick={() => setShowClarificationModal(false)}>
@@ -506,6 +669,25 @@ export default function AdminUserDetailPage() {
                 className="flex-1"
               >
                 Send & Open WhatsApp
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-5" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-base mb-1 text-red-700">Delete User?</h3>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              This will permanently delete <strong>{user.full_name}</strong> and all their data including members, requests, and referrals. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <Button size="sm" variant="secondary" onClick={() => setShowDeleteConfirm(false)} className="flex-1">Cancel</Button>
+              <Button size="sm" onClick={handleDeleteUser} loading={deleting} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+                <Trash2 size={14} className="mr-1" /> Delete
               </Button>
             </div>
           </div>
