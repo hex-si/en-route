@@ -122,18 +122,40 @@ export default function DashboardPage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const loginWithPhone = async (phone: string) => {
+  const loginWithPhone = async (query: string) => {
     setLoading(true);
     try {
       const supabase = createClient();
-      const { data: userData } = await supabase
-        .from("users")
-        .select("*")
-        .eq("phone", phone.trim())
-        .single();
+      const q = query.trim();
+      const isPhone = /^\+?\d+$/.test(q);
 
+      // 1. Search users (heads) first
+      let userData = null;
+      if (isPhone) {
+        const { data } = await supabase.from("users").select("*").eq("phone", q).single();
+        userData = data;
+      } else {
+        const { data } = await supabase.from("users").select("*").ilike("full_name", `%${q}%`).single();
+        userData = data;
+      }
+
+      // 2. If not found in users, check household_members — redirect to member dashboard
       if (!userData) {
-        toast.error("No account found with this phone number");
+        let memberData = null;
+        if (isPhone) {
+          const { data } = await supabase.from("household_members").select("phone").eq("phone", q).single();
+          memberData = data;
+        } else {
+          const { data } = await supabase.from("household_members").select("phone").ilike("name", `%${q}%`).single();
+          memberData = data;
+        }
+        if (memberData) {
+          localStorage.setItem("en-route-member-phone", memberData.phone);
+          toast.success("Welcome! Redirecting to your dashboard...");
+          router.push("/member-dashboard");
+          return;
+        }
+        toast.error("No account found. Try a different name or phone number.");
         setLoading(false);
         return;
       }
@@ -141,7 +163,7 @@ export default function DashboardPage() {
       setUser(userData);
       setEditPhotos(userData.photos || []);
       setShowLoginForm(false);
-      localStorage.setItem("en-route-phone", phone.trim());
+      localStorage.setItem("en-route-phone", q);
 
       const { count } = await supabase.from("users").select("*", { count: "exact", head: true });
       setTotalHouseholds(count || 0);
@@ -149,11 +171,11 @@ export default function DashboardPage() {
       const { count: refs } = await supabase.from("referrals").select("*", { count: "exact", head: true }).eq("referrer_id", userData.id);
       setReferralCount(refs || 0);
 
-      const { data: memberData } = await supabase.from("household_members").select("*").eq("user_id", userData.id).order("created_at");
-      if (memberData) setMembers(memberData);
+      const { data: memberData2 } = await supabase.from("household_members").select("*").eq("user_id", userData.id).order("created_at");
+      if (memberData2) setMembers(memberData2);
 
       // Flag members who have requested independence (their promoted account has a pending request).
-      const promotedIds = (memberData || []).filter((m) => m.promoted_user_id).map((m) => m.promoted_user_id);
+      const promotedIds = (memberData2 || []).filter((m) => m.promoted_user_id).map((m) => m.promoted_user_id);
       if (promotedIds.length > 0) {
         const { data: indepReqs } = await supabase
           .from("update_requests")
@@ -161,7 +183,7 @@ export default function DashboardPage() {
           .in("user_id", promotedIds)
           .eq("field", "independent_household")
           .eq("status", "pending");
-        const pendingMemberIds = (memberData || [])
+        const pendingMemberIds = (memberData2 || [])
           .filter((m) => indepReqs?.some((r) => r.user_id === m.promoted_user_id))
           .map((m) => m.id);
         setIndependencePendingMemberIds(pendingMemberIds);
@@ -363,12 +385,11 @@ export default function DashboardPage() {
                 <Phone className="text-white" size={28} />
               </div>
               <h1 className="text-xl font-bold mb-1">Your Dashboard</h1>
-              <p className="text-sm text-[var(--text-secondary)]">Enter your phone number to access your account</p>
+              <p className="text-sm text-[var(--text-secondary)]">Enter your phone number or name to access your account</p>
             </div>
             <form onSubmit={handleLogin} className="space-y-3">
               <Input
-                type="tel"
-                placeholder="+91XXXXXXXXXX"
+                placeholder="Phone number or full name"
                 value={phoneInput}
                 onChange={(e) => setPhoneInput(e.target.value)}
               />
@@ -377,9 +398,6 @@ export default function DashboardPage() {
               </Button>
             </form>
             <div className="mt-4 text-center space-y-2">
-              <Link href="/member-dashboard" className="text-sm text-[var(--primary)] hover:underline font-medium">
-                Household Member login
-              </Link>
               <Link href="/check" className="text-sm text-[var(--text-secondary)] hover:text-[var(--primary)]">
                 Check registration status
               </Link>

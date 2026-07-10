@@ -19,6 +19,7 @@ interface SearchResult {
   full_name?: string;
   verification_status?: string;
   points?: number;
+  is_member?: boolean;
 }
 
 const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; color: string }> = {
@@ -114,11 +115,32 @@ export default function HomePage() {
     setSearching(true); setSearchResult(null);
     try {
       const supabase = createClient();
-      const isPhone = /^\+?\d+$/.test(searchQuery.trim());
+      const q = searchQuery.trim();
+      const isPhone = /^\+?\d+$/.test(q);
       let data = null;
-      if (isPhone) { const { data: d } = await supabase.from("users").select("full_name, verification_status, points").eq("phone", searchQuery.trim()).single(); data = d; }
-      else { const { data: d } = await supabase.from("users").select("full_name, verification_status, points").ilike("full_name", `%${searchQuery.trim()}%`).single(); data = d; }
-      setSearchResult(data ? { registered: true, ...data } : { registered: false });
+      let isMember = false;
+
+      // 1. Search users (heads) first
+      if (isPhone) {
+        const { data: d } = await supabase.from("users").select("full_name, verification_status, points").eq("phone", q).single();
+        data = d;
+      } else {
+        const { data: d } = await supabase.from("users").select("full_name, verification_status, points").ilike("full_name", `%${q}%`).single();
+        data = d;
+      }
+
+      // 2. If not found in users, search household_members
+      if (!data) {
+        if (isPhone) {
+          const { data: d } = await supabase.from("household_members").select("name, phone").eq("phone", q).single();
+          if (d) { data = { full_name: d.name, verification_status: "verified", points: 0 }; isMember = true; }
+        } else {
+          const { data: d } = await supabase.from("household_members").select("name, phone").ilike("name", `%${q}%`).single();
+          if (d) { data = { full_name: d.name, verification_status: "verified", points: 0 }; isMember = true; }
+        }
+      }
+
+      setSearchResult(data ? { registered: true, ...data, is_member: isMember } : { registered: false });
     } catch { setSearchResult({ registered: false }); } finally { setSearching(false); }
   };
 
@@ -197,7 +219,6 @@ export default function HomePage() {
           </Link>
           <div className="mt-3 flex items-center justify-center gap-5 text-sm">
             <Link href="/dashboard" className="text-white/70 hover:text-white transition flex items-center gap-1">Dashboard <ChevronRight size={12} /></Link>
-            <Link href="/member-dashboard" className="text-white/70 hover:text-white transition flex items-center gap-1">Member <ChevronRight size={12} /></Link>
             <Link href="/check" className="text-white/70 hover:text-white transition flex items-center gap-1">Check Status <ChevronRight size={12} /></Link>
           </div>
         </div>
@@ -226,7 +247,7 @@ export default function HomePage() {
                           return <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full mt-1 ${cfg.color}`}><Icon size={10} /> {cfg.label}</span>;
                         })()}
                       </div>
-                      <Link href="/dashboard" className="text-emerald-600 text-sm font-medium flex items-center gap-0.5">Dashboard <ChevronRight size={12} /></Link>
+                      <Link href={searchResult.is_member ? "/member-dashboard" : "/dashboard"} className="text-emerald-600 text-sm font-medium flex items-center gap-0.5">Dashboard <ChevronRight size={12} /></Link>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between">

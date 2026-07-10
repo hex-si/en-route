@@ -14,6 +14,7 @@ interface SearchResult {
   verification_status?: string;
   points?: number;
   household_registration_id?: string;
+  is_member?: boolean;
 }
 
 const statusConfig = {
@@ -35,24 +36,75 @@ export default function CheckPage() {
     setSearched(true);
     try {
       const supabase = createClient();
-      const isPhone = /^\+?\d+$/.test(query.trim());
+      const q = query.trim();
+      const isPhone = /^\+?\d+$/.test(q);
       let data = null;
+      let isMember = false;
+
+      // 1. Search users (heads) first
       if (isPhone) {
         const { data: d } = await supabase
           .from("users")
           .select("full_name, verification_status, points, household_registration_id")
-          .eq("phone", query.trim())
+          .eq("phone", q)
           .single();
         data = d;
       } else {
         const { data: d } = await supabase
           .from("users")
           .select("full_name, verification_status, points, household_registration_id")
-          .ilike("full_name", `%${query.trim()}%`)
+          .ilike("full_name", `%${q}%`)
           .single();
         data = d;
       }
-      setResult(data ? { registered: true, ...data } : { registered: false });
+
+      // 2. If not found in users, search household_members
+      if (!data) {
+        if (isPhone) {
+          const { data: d } = await supabase
+            .from("household_members")
+            .select("name, phone, user_id")
+            .eq("phone", q)
+            .single();
+          if (d) {
+            // Fetch head info for registration ID
+            const { data: head } = await supabase
+              .from("users")
+              .select("household_registration_id, verification_status")
+              .eq("id", d.user_id)
+              .single();
+            data = {
+              full_name: d.name,
+              verification_status: head?.verification_status || "verified",
+              points: 0,
+              household_registration_id: head?.household_registration_id || null,
+            };
+            isMember = true;
+          }
+        } else {
+          const { data: d } = await supabase
+            .from("household_members")
+            .select("name, phone, user_id")
+            .ilike("name", `%${q}%`)
+            .single();
+          if (d) {
+            const { data: head } = await supabase
+              .from("users")
+              .select("household_registration_id, verification_status")
+              .eq("id", d.user_id)
+              .single();
+            data = {
+              full_name: d.name,
+              verification_status: head?.verification_status || "verified",
+              points: 0,
+              household_registration_id: head?.household_registration_id || null,
+            };
+            isMember = true;
+          }
+        }
+      }
+
+      setResult(data ? { registered: true, ...data, is_member: isMember } : { registered: false });
     } catch {
       setResult({ registered: false });
     } finally {
@@ -107,6 +159,12 @@ export default function CheckPage() {
                     </div>
                   )}
                   <p className="text-sm text-[var(--text-secondary)] mt-3">Points: {result.points || 0}/30</p>
+                  <Link
+                    href={result.is_member ? "/member-dashboard" : "/dashboard"}
+                    className="inline-flex items-center gap-2 bg-[var(--primary)] text-white px-5 py-2.5 rounded-xl font-medium hover:bg-[var(--primary-dark)] transition mt-4"
+                  >
+                    View Dashboard
+                  </Link>
                 </>
               ) : (
                 <>
