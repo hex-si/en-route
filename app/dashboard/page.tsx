@@ -106,6 +106,20 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // Realtime household count subscription
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("dashboard_households_live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "users" }, () => {
+        supabase.from("users").select("*", { count: "exact", head: true }).then(({ count }) => {
+          setTotalHouseholds(count || 0);
+        });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   const loginWithPhone = async (phone: string) => {
     setLoading(true);
     try {

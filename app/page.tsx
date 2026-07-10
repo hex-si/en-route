@@ -84,6 +84,20 @@ export default function HomePage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  // Realtime household count subscription
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("households_live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "users" }, () => {
+        supabase.from("users").select("*", { count: "exact", head: true }).then(({ count }) => {
+          setCount(count || 0);
+        });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   const loadData = async () => {
     try {
       const supabase = createClient();
