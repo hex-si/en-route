@@ -1,5 +1,5 @@
 ﻿"use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { MapPin, ArrowLeft, Plus, X, Navigation } from "lucide-react";
@@ -19,18 +19,11 @@ interface Member {
   phone: string;
 }
 
-interface Zone {
-  id: string;
-  name: string;
-  prefix: string;
-}
-
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
-  const [zones, setZones] = useState<Zone[]>([]);
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
@@ -39,13 +32,6 @@ export default function RegisterPage() {
     houseType: "",
     zoneId: "",
   });
-
-  useEffect(() => {
-    fetch("/api/zones")
-      .then((r) => r.json())
-      .then((d) => setZones(d.zones || []))
-      .catch(() => {});
-  }, []);
 
   const points = useMemo(() => calculatePoints({
     fullName: form.fullName,
@@ -93,10 +79,40 @@ export default function RegisterPage() {
         if (referrer) referredBy = referrer.id;
       }
 
+      // Find or create zone by name
+      const zoneName = form.zoneId.trim();
+      let { data: zone } = await supabase
+        .from("zones")
+        .select("id")
+        .eq("name", zoneName)
+        .single();
+
+      if (!zone) {
+        // Auto-generate prefix from first letters of each word
+        const prefix = zoneName
+          .split(/\s+/)
+          .map((w) => w[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 3);
+        const { data: newZone } = await supabase
+          .from("zones")
+          .insert({ name: zoneName, prefix })
+          .select("id")
+          .single();
+        zone = newZone;
+      }
+
+      if (!zone) {
+        toast.error("Failed to create zone. Please try again.");
+        setLoading(false);
+        return;
+      }
+
       // Generate household registration ID via RPC
       const { data: regId, error: regIdError } = await supabase.rpc(
         "generate_household_registration_id",
-        { zone_uuid: form.zoneId }
+        { zone_uuid: zone.id }
       );
       if (regIdError) {
         toast.error("Failed to generate registration ID. Please try again.");
@@ -116,7 +132,7 @@ export default function RegisterPage() {
           points,
           referral_code: referralCode,
           referred_by: referredBy,
-          zone_id: form.zoneId,
+          zone_id: zone.id,
           household_registration_id: regId,
         })
         .select("id")
@@ -228,18 +244,12 @@ export default function RegisterPage() {
             <label className="block text-sm font-medium text-[var(--text)]">
               Zone <span className="text-[var(--error)]">*</span>
             </label>
-            <select
+            <Input
+              placeholder="e.g. Phungreitang – East, Wino – West..."
               value={form.zoneId}
               onChange={(e) => update("zoneId", e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition text-sm"
               required
-            >
-              <option value="">Select your zone...</option>
-              {zones.map((z) => (
-                <option key={z.id} value={z.id}>{z.name}</option>
-              ))}
-            </select>
-            <p className="text-xs text-[var(--text-secondary)]">Used to generate your Household Registration ID</p>
+            />
           </div>
 
           <div className="space-y-1.5">
