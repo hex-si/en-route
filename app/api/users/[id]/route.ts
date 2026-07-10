@@ -7,7 +7,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const supabase = createAdminClient();
-  const { data, error } = await supabase.from("users").select("id, full_name, phone, maps_link, location_desc, points, verification_status, clarification_note, referral_code, house_type, created_at, photos").eq("id", id).single();
-  if (error) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const { data, error } = await supabase.from("users").select("*").eq("id", id).single();
+  if (error) return NextResponse.json({ error: error.message, details: error.details }, { status: 500 });
   return NextResponse.json(data);
 }

@@ -15,7 +15,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     updateData.clarification_note = null;
   }
 
-  const { error } = await supabase.from("users").update(updateData).eq("id", id);
+  let { error } = await supabase.from("users").update(updateData).eq("id", id);
+  // Fallback if clarification_note column does not exist yet
+  if (error && /clarification_note/.test(error.message)) {
+    const { error: fallbackError } = await supabase.from("users").update({ verification_status: status }).eq("id", id);
+    error = fallbackError;
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Get user phone for WhatsApp
