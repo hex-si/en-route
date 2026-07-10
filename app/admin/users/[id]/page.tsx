@@ -27,6 +27,13 @@ interface HouseholdMember {
   phone: string;
 }
 
+function toWhatsAppPhone(phone: string): string {
+  const digits = phone.replace(/[^0-9]/g, "");
+  if (digits.startsWith("91") && digits.length >= 12) return digits;
+  if (digits.length === 10) return `91${digits}`;
+  return digits;
+}
+
 const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; color: string }> = {
   pending_verification: { label: "Pending", icon: Clock, color: "text-yellow-600 bg-yellow-50" },
   verified: { label: "Verified", icon: CheckCircle, color: "text-green-600 bg-green-50" },
@@ -190,7 +197,7 @@ export default function AdminUserDetailPage() {
           <CardHeader><h2 className="font-semibold text-sm">Contact</h2></CardHeader>
           <CardContent className="space-y-3">
             <a
-              href={`https://wa.me/${user.phone.replace(/[^0-9]/g, "")}`}
+              href={`https://wa.me/${toWhatsAppPhone(user.phone)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 bg-green-500 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-green-600 transition"
@@ -205,7 +212,7 @@ export default function AdminUserDetailPage() {
                     <div key={member.id} className="flex items-center justify-between text-sm">
                       <span>{member.name}</span>
                       <a
-                        href={`https://wa.me/${member.phone.replace(/[^0-9]/g, "")}`}
+                         href={`https://wa.me/${toWhatsAppPhone(member.phone)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-[var(--primary)] text-xs hover:underline"

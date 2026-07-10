@@ -288,11 +288,7 @@ export default function AdminAdsPage() {
                   <ExternalLink size={10} />
                   <a href={ad.link_url} target="_blank" rel="noopener noreferrer" className="truncate hover:text-[var(--primary)]">{ad.link_url}</a>
                 </div>
-                {ad.video_data ? (
-                  <video src={ad.video_data} className="w-full h-40 object-cover rounded-lg border border-[var(--border)] mb-3" controls />
-                ) : ad.image_data ? (
-                  <img src={ad.image_data} alt={ad.title} className="w-full h-32 object-cover rounded-lg border border-[var(--border)] mb-3" />
-                ) : ad.image_url ? (
+                {ad.image_url ? (
                   <img src={ad.image_url} alt={ad.title} className="w-full h-32 object-cover rounded-lg border border-[var(--border)] mb-3" />
                 ) : null}
                 <div className="flex gap-2">

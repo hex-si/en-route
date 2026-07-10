@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { ArrowLeft, Plus, Trash2, Save, Eye, EyeOff, ExternalLink, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
+import imageCompression from "browser-image-compression";
 
 interface Update {
   id: string;
@@ -104,14 +105,27 @@ export default function AdminUpdatesPage() {
     setShowForm(true);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setForm({ ...form, image_data: reader.result as string });
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+      });
+      const reader = new FileReader();
+      reader.onload = () => {
+        setForm({ ...form, image_data: reader.result as string });
+      };
+      reader.readAsDataURL(compressed);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setForm({ ...form, image_data: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const formatDate = (date: string) => {

@@ -27,7 +27,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (status === "needs_clarification" && clarificationNote) {
     const { data: user } = await supabase.from("users").select("phone, full_name").eq("id", id).single();
     if (user) {
-      const phone = user.phone.replace(/[^0-9]/g, "");
+      const digits = user.phone.replace(/[^0-9]/g, "");
+      const phone = digits.startsWith("91") && digits.length >= 12 ? digits : digits.length === 10 ? `91${digits}` : digits;
       const message = encodeURIComponent(`Hi ${user.full_name},\n\nYour En-Route verification needs some clarification:\n\n"${clarificationNote}"\n\nPlease update your information at: ${process.env.NEXT_PUBLIC_SITE_URL || "https://discoverukhrul.site"}/dashboard`);
       const whatsappUrl = `https://wa.me/${phone}?text=${message}`;
       return NextResponse.json({ ok: true, whatsappUrl });

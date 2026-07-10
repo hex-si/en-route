@@ -1,7 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const allowedFields = ["full_name", "phone", "maps_link", "location_desc", "photos"];
+const allowedFields = ["full_name", "phone", "maps_link", "location_desc", "photos", "house_type", "clarification_note"];
 
 export async function GET() {
   const supabase = createAdminClient();
@@ -14,25 +14,33 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const { id, status } = await request.json();
-  const supabase = createAdminClient();
+  try {
+    const { id, status } = await request.json();
+    const supabase = createAdminClient();
 
-  const { data: req, error: fetchError } = await supabase
-    .from("update_requests")
-    .select("*")
-    .eq("id", id)
-    .single();
+    const { data: req, error: fetchError } = await supabase
+      .from("update_requests")
+      .select("*")
+      .eq("id", id)
+      .single();
 
-  if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
 
-  if (status === "approved" && allowedFields.includes(req.field)) {
-    await supabase.from("users").update({ [req.field]: req.new_value }).eq("id", req.user_id);
+    if (status === "approved" && allowedFields.includes(req.field)) {
+      const { error: updateError } = await supabase.from("users").update({ [req.field]: req.new_value }).eq("id", req.user_id);
+      if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    const { error: resolveError } = await supabase
+      .from("update_requests")
+      .update({ status, resolved_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (resolveError) return NextResponse.json({ error: resolveError.message }, { status: 500 });
+
+    return NextResponse.json({ ok: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  await supabase
-    .from("update_requests")
-    .update({ status, resolved_at: new Date().toISOString() })
-    .eq("id", id);
-
-  return NextResponse.json({ ok: true });
 }
