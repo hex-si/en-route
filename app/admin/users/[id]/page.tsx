@@ -28,6 +28,14 @@ interface HouseholdMember {
   promoted_user_id: string | null;
 }
 
+interface Referral {
+  id: string;
+  referred_user_id: string;
+  referred_name: string;
+  referred_phone: string;
+  created_at: string;
+}
+
 function toWhatsAppPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, "");
   if (digits.startsWith("91") && digits.length >= 12) return digits;
@@ -48,6 +56,7 @@ export default function AdminUserDetailPage() {
   const id = params.id as string;
   const [user, setUser] = useState<UserData | null>(null);
   const [members, setMembers] = useState<HouseholdMember[]>([]);
+  const [referrals, setReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
@@ -66,6 +75,40 @@ export default function AdminUserDetailPage() {
       const memberData = await memberRes.json();
       setMembers(memberData.members || []);
     }
+
+    // Fetch referrals (people this user referred)
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data: refs } = await supabase
+        .from("referrals")
+        .select("id, referred_user_id, created_at")
+        .eq("referrer_id", id);
+      
+      if (refs && refs.length > 0) {
+        const userIds = refs.map(r => r.referred_user_id);
+        const { data: referredUsers } = await supabase
+          .from("users")
+          .select("id, full_name, phone")
+          .in("id", userIds);
+        
+        const userMap: Record<string, { full_name: string; phone: string }> = {};
+        referredUsers?.forEach(u => { userMap[u.id] = u; });
+        
+        setReferrals(refs.map(r => ({
+          id: r.id,
+          referred_user_id: r.referred_user_id,
+          referred_name: userMap[r.referred_user_id]?.full_name || "Unknown",
+          referred_phone: userMap[r.referred_user_id]?.phone || "",
+          created_at: r.created_at,
+        })));
+      } else {
+        setReferrals([]);
+      }
+    } catch {
+      setReferrals([]);
+    }
+
     setLoading(false);
   }, [id]);
 
@@ -279,6 +322,42 @@ export default function AdminUserDetailPage() {
                 ))}
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Referrals */}
+        <Card>
+          <CardHeader>
+            <h2 className="font-semibold text-sm">Referrals ({referrals.length})</h2>
+          </CardHeader>
+          <CardContent>
+            {referrals.length > 0 ? (
+              <div className="space-y-2">
+                {referrals.map((ref) => (
+                  <div key={ref.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5">
+                    <div>
+                      <p className="text-sm font-medium">{ref.referred_name}</p>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        {ref.referred_phone ? `${ref.referred_phone.slice(0, 2)}xxxx${ref.referred_phone.slice(-2)}` : "No phone"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        {new Date(ref.created_at).toLocaleDateString()}
+                      </p>
+                      <a
+                        href={`/admin/users/${ref.referred_user_id}`}
+                        className="text-xs text-[var(--primary)] hover:underline"
+                      >
+                        View
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-secondary)]">No referrals yet</p>
+            )}
           </CardContent>
         </Card>
       </div>
