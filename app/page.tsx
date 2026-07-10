@@ -172,7 +172,7 @@ export default function HomePage() {
               <p className="text-[11px] text-white/60 mt-0.5">{showVisited ? "total visits" : "households"}</p>
             </div>
             <div className="w-px h-8 bg-white/20" />
-            <div className="text-center min-w-[100px]">
+            <div className="text-center min-w-[140px] max-w-[180px]">
               {areas.length > 0 ? (
                 <>
                   <div className="relative h-7 overflow-hidden">
@@ -180,7 +180,7 @@ export default function HomePage() {
                       const activeAreas = areas.filter((a) => a.is_active);
                       const isActive = i === (activeAreaIndex % activeAreas.length);
                       return (
-                        <span key={area.name} className={`absolute inset-0 flex items-center justify-center text-base font-bold text-emerald-400 transition-all duration-500 ${isActive ? "translate-y-0 opacity-100" : "translate-y-full opacity-0"}`}>{area.name}</span>
+                        <span key={area.name} className={`absolute inset-0 flex items-center justify-center text-base font-bold text-emerald-400 transition-all duration-500 truncate ${isActive ? "translate-y-0 opacity-100" : "translate-y-full opacity-0"}`}>{area.name}</span>
                       );
                     })}
                   </div>
