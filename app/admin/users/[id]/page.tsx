@@ -67,6 +67,8 @@ export default function AdminUserDetailPage() {
   const [clarificationNote, setClarificationNote] = useState("");
   const [pendingStatus, setPendingStatus] = useState("");
   const [zoneName, setZoneName] = useState<string | null>(null);
+  const [zoneInput, setZoneInput] = useState("");
+  const [savingZone, setSavingZone] = useState(false);
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/users/${id}`);
@@ -169,6 +171,71 @@ export default function AdminUserDetailPage() {
       setShowClarificationModal(true);
     } else {
       updateStatus(status);
+    }
+  };
+
+  const handleSaveZone = async () => {
+    if (!zoneInput.trim()) return;
+    setSavingZone(true);
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const zoneNameVal = zoneInput.trim();
+
+      let { data: zone } = await supabase
+        .from("zones")
+        .select("id")
+        .eq("name", zoneNameVal)
+        .single();
+
+      if (!zone) {
+        const prefix = zoneNameVal
+          .split(/\s+/)
+          .map((w: string) => w[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 3);
+        const { data: newZone } = await supabase
+          .from("zones")
+          .insert({ name: zoneNameVal, prefix })
+          .select("id")
+          .single();
+        zone = newZone;
+      }
+
+      if (!zone) {
+        toast.error("Failed to create zone");
+        setSavingZone(false);
+        return;
+      }
+
+      const { data: regId, error: regIdError } = await supabase.rpc(
+        "generate_household_registration_id",
+        { zone_uuid: zone.id }
+      );
+      if (regIdError) {
+        toast.error("Failed to generate ID");
+        setSavingZone(false);
+        return;
+      }
+
+      const { error } = await supabase
+        .from("users")
+        .update({ zone_id: zone.id, household_registration_id: regId })
+        .eq("id", id);
+      if (error) {
+        toast.error("Failed to save");
+        setSavingZone(false);
+        return;
+      }
+
+      setUser((u) => u ? { ...u, zone_id: zone.id, household_registration_id: regId } : null);
+      setZoneName(zoneNameVal);
+      toast.success("Zone and Household ID assigned!");
+    } catch {
+      toast.error("Something went wrong");
+    } finally {
+      setSavingZone(false);
     }
   };
 
@@ -309,6 +376,23 @@ export default function AdminUserDetailPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-[var(--text-secondary)]">Zone</span>
                 <span className="text-sm font-medium">{zoneName}</span>
+              </div>
+            )}
+            {!user.household_registration_id && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                <p className="text-xs font-medium text-blue-800 mb-2">No Zone or Household ID</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Zone name (e.g. Phungreitang – East)"
+                    value={zoneInput}
+                    onChange={(e) => setZoneInput(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
+                  />
+                  <Button size="sm" onClick={handleSaveZone} loading={savingZone} disabled={!zoneInput.trim()}>
+                    Assign
+                  </Button>
+                </div>
               </div>
             )}
             <div className="flex items-center justify-between">

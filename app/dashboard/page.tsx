@@ -99,6 +99,8 @@ export default function DashboardPage() {
   const [savingPhotos, setSavingPhotos] = useState(false);
   const [requestPhoto, setRequestPhoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [zoneInput, setZoneInput] = useState("");
+  const [savingZone, setSavingZone] = useState(false);
 
   useEffect(() => {
     const savedPhone = localStorage.getItem("en-route-phone");
@@ -250,6 +252,72 @@ export default function DashboardPage() {
     setPendingIndependence(false);
     setShowLoginForm(true);
     setPhoneInput("");
+  };
+
+  const handleSaveZone = async () => {
+    if (!user || !zoneInput.trim()) return;
+    setSavingZone(true);
+    try {
+      const supabase = createClient();
+      const zoneName = zoneInput.trim();
+
+      // Find or create zone
+      let { data: zone } = await supabase
+        .from("zones")
+        .select("id")
+        .eq("name", zoneName)
+        .single();
+
+      if (!zone) {
+        const prefix = zoneName
+          .split(/\s+/)
+          .map((w: string) => w[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 3);
+        const { data: newZone } = await supabase
+          .from("zones")
+          .insert({ name: zoneName, prefix })
+          .select("id")
+          .single();
+        zone = newZone;
+      }
+
+      if (!zone) {
+        toast.error("Failed to create zone");
+        setSavingZone(false);
+        return;
+      }
+
+      // Generate household registration ID
+      const { data: regId, error: regIdError } = await supabase.rpc(
+        "generate_household_registration_id",
+        { zone_uuid: zone.id }
+      );
+      if (regIdError) {
+        toast.error("Failed to generate ID");
+        setSavingZone(false);
+        return;
+      }
+
+      // Update user
+      const { error } = await supabase
+        .from("users")
+        .update({ zone_id: zone.id, household_registration_id: regId })
+        .eq("id", user.id);
+      if (error) {
+        toast.error("Failed to save");
+        setSavingZone(false);
+        return;
+      }
+
+      setUser((u) => u ? { ...u, zone_id: zone.id, household_registration_id: regId } : null);
+      toast.success("Zone and Household ID saved!");
+    } catch {
+      toast.error("Something went wrong");
+    } finally {
+      setSavingZone(false);
+    }
   };
 
   const handleRequestIndependence = async () => {
@@ -462,13 +530,18 @@ export default function DashboardPage() {
             )}
           </div>
           {/* Household Registration ID */}
-          {user.household_registration_id && (
+          {user.household_registration_id ? (
             <div className="bg-white/15 rounded-xl px-4 py-2.5 mb-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-white/70">Household Registration ID</p>
                 <p className="text-lg font-mono font-bold tracking-wider">{user.household_registration_id}</p>
               </div>
               <Home size={20} className="text-white/60" />
+            </div>
+          ) : (
+            <div className="bg-white/15 rounded-xl px-4 py-2.5 mb-4">
+              <p className="text-xs text-white/70 mb-2">No Household ID yet</p>
+              <p className="text-xs text-white/60">Enter your zone below to get your Household Registration ID.</p>
             </div>
           )}
           <div className="flex items-center justify-between">
@@ -502,6 +575,33 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Zone Update Form — shown when user has no zone yet */}
+        {!user.zone_id && (
+          <Card className="mb-6 border-[var(--primary)]/20">
+            <CardContent className="py-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-[var(--primary)]/10 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                  <Home size={16} className="text-[var(--primary)]" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-[var(--text)] mb-1">Set Your Zone</p>
+                  <p className="text-xs text-[var(--text-secondary)] mb-3">Enter your zone to get your Household Registration ID.</p>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="e.g. Phungreitang – East"
+                      value={zoneInput}
+                      onChange={(e) => setZoneInput(e.target.value)}
+                    />
+                    <Button size="sm" onClick={handleSaveZone} loading={savingZone} disabled={!zoneInput.trim()}>
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Household membership banner */}
