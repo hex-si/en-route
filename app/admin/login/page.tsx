@@ -29,7 +29,7 @@ export default function AdminLoginPage() {
         body: JSON.stringify({ phone: phone.trim(), password }),
       });
       if (res.ok) {
-        document.cookie = "en-route-admin=true; path=/admin; max-age=86400";
+        document.cookie = "en-route-admin=true; path=/; max-age=86400";
         localStorage.setItem("en-route-admin", "true");
         toast.success("Welcome, Admin");
         router.push("/admin/users");
@@ -69,7 +69,7 @@ export default function AdminLoginPage() {
         body: JSON.stringify({ phone: phone.trim(), securityAnswer: securityAnswer.trim() }),
       });
       if (res.ok) {
-        document.cookie = "en-route-admin=true; path=/admin; max-age=86400";
+        document.cookie = "en-route-admin=true; path=/; max-age=86400";
         localStorage.setItem("en-route-admin", "true");
         toast.success("Welcome, Admin");
         router.push("/admin/users");
