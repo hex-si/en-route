@@ -10,7 +10,7 @@
   },
   "routes": [
     {
-      "pattern": "enroute.discoverukhrul.site/*",
+      "pattern": "discoverukhrul.site/*",
       "zone_name": "discoverukhrul.site"
     }
   ]
