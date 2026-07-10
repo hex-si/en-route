@@ -1,6 +1,7 @@
 {
   "name": "en-route",
   "main": ".open-next/worker.js",
+  "account_id": "0aebe6dcaece2237bd1786924ea5e348",
   "compatibility_date": "2026-07-09",
   "compatibility_flags": ["nodejs_compat"]
 }
