@@ -25,13 +25,15 @@ interface HouseholdMember {
   id: string;
   name: string;
   phone: string;
+  promoted_user_id: string | null;
 }
 
 function toWhatsAppPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, "");
   if (digits.startsWith("91") && digits.length >= 12) return digits;
   if (digits.length === 10) return `91${digits}`;
-  return digits;
+  if (digits.length > 10 && !digits.startsWith("91")) return `91${digits.slice(-10)}`;
+  return `91${digits}`;
 }
 
 const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; color: string }> = {
@@ -210,7 +212,14 @@ export default function AdminUserDetailPage() {
                 <div className="space-y-1.5">
                   {members.map((member) => (
                     <div key={member.id} className="flex items-center justify-between text-sm">
-                      <span>{member.name}</span>
+                      <span className="flex items-center gap-2">
+                        {member.name}
+                        {member.promoted_user_id && (
+                          <span className="text-[10px] text-green-700 bg-green-50 border border-green-200 font-medium px-1.5 py-0.5 rounded-full">
+                            Registered
+                          </span>
+                        )}
+                      </span>
                       <a
                          href={`https://wa.me/${toWhatsAppPhone(member.phone)}`}
                         target="_blank"

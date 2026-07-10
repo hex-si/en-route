@@ -1,5 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { phonesMatch } from "@/lib/phone";
 
 export async function POST(request: Request) {
   try {
@@ -34,6 +35,32 @@ export async function POST(request: Request) {
       await supabase.from("household_members").insert(
         members.map((m: { name: string; phone: string }) => ({ user_id: user.id, name: m.name, phone: m.phone }))
       );
+    }
+
+    // If this registrant was previously listed as a household member of another
+    // user, link the two accounts and mark the member row as promoted.
+    const { data: linkedMember } = await supabase
+      .from("household_members")
+      .select("id, user_id")
+      .filter("promoted_user_id", "is", null)
+      .eq("phone", phone)
+      .limit(1)
+      .maybeSingle();
+
+    if (linkedMember) {
+      await supabase.from("users").update({ head_user_id: linkedMember.user_id }).eq("id", user.id);
+      await supabase.from("household_members").update({ promoted_user_id: user.id }).eq("id", linkedMember.id);
+    } else {
+      // Fallback: match by normalized phone (handles "+91" vs bare formatting).
+      const { data: allMembers } = await supabase
+        .from("household_members")
+        .select("id, user_id, phone")
+        .filter("promoted_user_id", "is", null);
+      const match = (allMembers || []).find((m) => phonesMatch(m.phone, phone));
+      if (match) {
+        await supabase.from("users").update({ head_user_id: match.user_id }).eq("id", user.id);
+        await supabase.from("household_members").update({ promoted_user_id: user.id }).eq("id", match.id);
+      }
     }
 
     return NextResponse.json({ ok: true, userId: user.id });

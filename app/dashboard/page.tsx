@@ -26,12 +26,14 @@ interface UserData {
   location_desc: string;
   maps_link: string;
   house_type: string | null;
+  head_user_id: string | null;
 }
 
 interface HouseholdMember {
   id: string;
   name: string;
   phone: string;
+  promoted_user_id: string | null;
 }
 
 interface LeaderboardEntry {
@@ -77,6 +79,10 @@ export default function DashboardPage() {
   const [showLoginForm, setShowLoginForm] = useState(true);
   const [user, setUser] = useState<UserData | null>(null);
   const [members, setMembers] = useState<HouseholdMember[]>([]);
+  const [independencePendingMemberIds, setIndependencePendingMemberIds] = useState<string[]>([]);
+  const [headName, setHeadName] = useState<string | null>(null);
+  const [pendingIndependence, setPendingIndependence] = useState(false);
+  const [requestingIndependence, setRequestingIndependence] = useState(false);
   const [totalHouseholds, setTotalHouseholds] = useState(0);
   const [referralCount, setReferralCount] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -130,6 +136,43 @@ export default function DashboardPage() {
       const { data: memberData } = await supabase.from("household_members").select("*").eq("user_id", userData.id).order("created_at");
       if (memberData) setMembers(memberData);
 
+      // Flag members who have requested independence (their promoted account has a pending request).
+      const promotedIds = (memberData || []).filter((m) => m.promoted_user_id).map((m) => m.promoted_user_id);
+      if (promotedIds.length > 0) {
+        const { data: indepReqs } = await supabase
+          .from("update_requests")
+          .select("user_id")
+          .in("user_id", promotedIds)
+          .eq("field", "independent_household")
+          .eq("status", "pending");
+        const pendingMemberIds = (memberData || [])
+          .filter((m) => indepReqs?.some((r) => r.user_id === m.promoted_user_id))
+          .map((m) => m.id);
+        setIndependencePendingMemberIds(pendingMemberIds);
+      } else {
+        setIndependencePendingMemberIds([]);
+      }
+
+      // If this user was originally a household member of someone else, show the
+      // head's name and whether they've requested independence.
+      if (userData.head_user_id) {
+        const { data: headData } = await supabase.from("users").select("full_name").eq("id", userData.head_user_id).single();
+        setHeadName(headData?.full_name || null);
+
+        const { data: indepReq } = await supabase
+          .from("update_requests")
+          .select("id, status")
+          .eq("user_id", userData.id)
+          .eq("field", "independent_household")
+          .eq("status", "pending")
+          .limit(1)
+          .maybeSingle();
+        setPendingIndependence(!!indepReq);
+      } else {
+        setHeadName(null);
+        setPendingIndependence(false);
+      }
+
       const { data: reqData } = await supabase.from("update_requests").select("id, field, new_value, status, created_at").eq("user_id", userData.id).order("created_at", { ascending: false }).limit(10);
       if (reqData) setRequests(reqData);
 
@@ -165,8 +208,30 @@ export default function DashboardPage() {
   const handleLogout = () => {
     localStorage.removeItem("en-route-phone");
     setUser(null);
+    setHeadName(null);
+    setPendingIndependence(false);
     setShowLoginForm(true);
     setPhoneInput("");
+  };
+
+  const handleRequestIndependence = async () => {
+    if (!user) return;
+    setRequestingIndependence(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from("update_requests").insert({
+        user_id: user.id,
+        field: "independent_household",
+        new_value: "I would like to manage my own independent household.",
+      });
+      if (error) throw error;
+      setPendingIndependence(true);
+      toast.success("Independence request submitted");
+    } catch {
+      toast.error("Failed to submit request");
+    } finally {
+      setRequestingIndependence(false);
+    }
   };
 
   const copyReferralLink = () => {
@@ -385,6 +450,34 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Household membership banner */}
+        {user.head_user_id && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                <Users size={16} className="text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-blue-800 mb-1">Part of a household</p>
+                <p className="text-sm text-blue-700">
+                  You're registered under {headName ? maskName(headName) : "another"}'s household.
+                </p>
+                {pendingIndependence ? (
+                  <p className="text-xs text-blue-600 mt-2 font-medium">Request to manage your own household is pending review.</p>
+                ) : (
+                  <button
+                    onClick={handleRequestIndependence}
+                    disabled={requestingIndependence}
+                    className="mt-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 px-3 py-1.5 rounded-lg transition"
+                  >
+                    {requestingIndependence ? "Submitting..." : "Request Independent Household"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Progress */}
         <Card className="mb-6">
           <CardContent>
@@ -461,6 +554,11 @@ export default function DashboardPage() {
                       <p className="text-sm font-medium">{maskName(member.name)}</p>
                       <p className="text-xs text-[var(--text-secondary)]">{maskPhone(member.phone)}</p>
                     </div>
+                    {member.promoted_user_id && (
+                      <span className="text-xs text-green-700 bg-green-50 border border-green-200 font-medium px-2 py-1 rounded-full shrink-0">
+                        {independencePendingMemberIds.includes(member.id) ? "Independence requested" : "Registered ✓"}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>

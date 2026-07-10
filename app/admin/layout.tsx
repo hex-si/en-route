@@ -2,11 +2,12 @@
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Users, FileText, Download, LogOut, Shield, Megaphone, Calendar } from "lucide-react";
+import { Users, FileText, Download, LogOut, Shield, Megaphone, Calendar, MapPin } from "lucide-react";
 
 const navItems = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/requests", label: "Requests", icon: FileText },
+  { href: "/admin/areas", label: "Areas", icon: MapPin },
   { href: "/admin/ads", label: "Ads", icon: Megaphone },
   { href: "/admin/updates", label: "Updates", icon: Calendar },
   { href: "/admin/export", label: "Export", icon: Download },

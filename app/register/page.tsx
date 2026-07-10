@@ -11,6 +11,7 @@ import { PhotoUpload } from "@/components/ui/PhotoUpload";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { calculatePoints } from "@/lib/points";
 import { generateReferralCode } from "@/lib/referrals";
+import { phonesMatch } from "@/lib/phone";
 import { createClient } from "@/lib/supabase/client";
 
 interface Member {
@@ -108,6 +109,18 @@ export default function RegisterPage() {
         await supabase.from("household_members").insert(
           validMembers.map((m) => ({ user_id: user.id, name: m.name.trim(), phone: m.phone.trim() }))
         );
+      }
+
+      // If this registrant was previously listed as a household member of another
+      // user, link the two accounts and mark the member row as promoted.
+      const { data: memberMatches } = await supabase
+        .from("household_members")
+        .select("id, user_id, phone")
+        .filter("promoted_user_id", "is", null);
+      const linkedMember = (memberMatches || []).find((m) => phonesMatch(m.phone, form.phone));
+      if (linkedMember) {
+        await supabase.from("users").update({ head_user_id: linkedMember.user_id }).eq("id", user.id);
+        await supabase.from("household_members").update({ promoted_user_id: user.id }).eq("id", linkedMember.id);
       }
 
       // Log points

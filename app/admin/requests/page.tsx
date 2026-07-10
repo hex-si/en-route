@@ -37,6 +37,7 @@ const fieldLabels: Record<string, string> = {
   spouse_phone: "Spouse Phone",
   family_name: "Family Member Name",
   family_phone: "Family Member Phone",
+  independent_household: "Independent Household Request",
 };
 
 export default function AdminRequestsPage() {

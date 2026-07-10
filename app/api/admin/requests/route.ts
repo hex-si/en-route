@@ -31,6 +31,22 @@ export async function PATCH(request: Request) {
       if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
+    // Independence request: detach the member from the head's household so they
+    // become a fully independent head who can manage their own members.
+    if (status === "approved" && req.field === "independent_household") {
+      const { error: deleteError } = await supabase
+        .from("household_members")
+        .delete()
+        .eq("promoted_user_id", req.user_id);
+      if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+
+      const { error: headError } = await supabase
+        .from("users")
+        .update({ head_user_id: null })
+        .eq("id", req.user_id);
+      if (headError) return NextResponse.json({ error: headError.message }, { status: 500 });
+    }
+
     const { error: resolveError } = await supabase
       .from("update_requests")
       .update({ status, resolved_at: new Date().toISOString() })

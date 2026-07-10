@@ -1,7 +1,7 @@
 ﻿"use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { MapPin, Users, CheckCircle, ArrowRight, Trophy, Search, Clock, AlertCircle, ChevronRight, ChevronDown, MessageCircle, Mail, Info } from "lucide-react";
+import { MapPin, Users, CheckCircle, ArrowRight, Trophy, Search, Clock, AlertCircle, ChevronRight, ChevronDown, MessageCircle, Mail, Info, Navigation } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -38,6 +38,7 @@ export default function HomePage() {
   const [showContact, setShowContact] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [updates, setUpdates] = useState<any[]>([]);
+  const [areas, setAreas] = useState<{ id: string; name: string; description: string | null }[]>([]);
   const [displayCount, setDisplayCount] = useState(0);
   const [showVisited, setShowVisited] = useState(false);
   const [visitedCount, setVisitedCount] = useState(0);
@@ -121,6 +122,12 @@ export default function HomePage() {
         const data = await res.json();
         setUpdates(data.updates || []);
       } catch {}
+
+      try {
+        const aRes = await fetch("/api/areas");
+        const aData = await aRes.json();
+        setAreas(aData.areas || []);
+      } catch {}
     } catch {}
   };
 
@@ -194,6 +201,28 @@ export default function HomePage() {
       </div>
 
       <div className="max-w-lg mx-auto px-5 space-y-5 pb-12">
+        {/* Active Areas */}
+        {areas.length > 0 && (
+          <Card className="border-[var(--primary)]/20">
+            <CardContent className="py-4">
+              <p className="text-sm font-medium mb-3 flex items-center gap-1.5">
+                <Navigation size={14} className="text-[var(--primary)]" /> Where We Are Mapping
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {areas.map((area) => (
+                  <div
+                    key={area.id}
+                    className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-sm font-medium"
+                  >
+                    <MapPin size={12} />
+                    {area.name}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Quick Check */}
         <Card className="border-[var(--primary)]/20">
           <CardContent className="py-4">
