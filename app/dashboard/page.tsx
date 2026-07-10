@@ -521,7 +521,7 @@ export default function DashboardPage() {
             </div>
             <button
               onClick={shareReferralWhatsApp}
-              className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg:#20BD5A text-white py-3 rounded-xl text-sm font-medium transition active:scale-[0.98]"
+              className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20BD5A] text-white py-3 rounded-xl text-sm font-medium transition active:scale-[0.98]"
             >
               <MessageCircle size={16} /> Share on WhatsApp
             </button>

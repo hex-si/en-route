@@ -1,14 +1,13 @@
 ﻿"use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { MapPin, Users, CheckCircle, ArrowRight, Trophy, Search, Clock, AlertCircle, ChevronRight, ChevronDown, MessageCircle, Mail, Info, Navigation } from "lucide-react";
+import { MapPin, Users, CheckCircle, ArrowRight, Trophy, Search, Clock, AlertCircle, ChevronRight, ChevronDown, MessageCircle, Mail, Info, Shield, Truck, Home } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 import { FeatureGuideTrigger } from "@/components/FeatureGuide";
 import { AdBanner } from "@/components/AdBanner";
-import { HeroMedia } from "@/components/HeroMedia";
 
 interface LeaderboardEntry {
   referral_count: number;
@@ -38,7 +37,6 @@ export default function HomePage() {
   const [showContact, setShowContact] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [updates, setUpdates] = useState<any[]>([]);
-  const [areas, setAreas] = useState<{ id: string; name: string; description: string | null }[]>([]);
   const [displayCount, setDisplayCount] = useState(0);
   const [showVisited, setShowVisited] = useState(false);
   const [visitedCount, setVisitedCount] = useState(0);
@@ -47,7 +45,6 @@ export default function HomePage() {
     loadData();
   }, []);
 
-  // Animate count on load
   useEffect(() => {
     if (count === 0) return;
     let current = 0;
@@ -63,7 +60,6 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, [count]);
 
-  // Toggle between household count and visited count every 5 seconds
   useEffect(() => {
     if (count === 0) return;
     const timer = setInterval(() => {
@@ -72,7 +68,6 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, [count]);
 
-  // Realtime page_views subscription
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -84,30 +79,14 @@ export default function HomePage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Realtime household count subscription
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel("households_live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "users" }, () => {
-        supabase.from("users").select("*", { count: "exact", head: true }).then(({ count }) => {
-          setCount(count || 0);
-        });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
   const loadData = async () => {
     try {
       const supabase = createClient();
       const { count: c } = await supabase.from("users").select("*", { count: "exact", head: true });
       setCount(c || 0);
 
-      // Record this visit
       fetch("/api/views", { method: "POST" }).catch(() => {});
 
-      // Get real visit count
       try {
         const vRes = await fetch("/api/views");
         const vData = await vRes.json();
@@ -135,12 +114,6 @@ export default function HomePage() {
         const res = await fetch("/api/updates");
         const data = await res.json();
         setUpdates(data.updates || []);
-      } catch {}
-
-      try {
-        const aRes = await fetch("/api/areas");
-        const aData = await aRes.json();
-        setAreas(aData.areas || []);
       } catch {}
     } catch {}
   };
@@ -172,326 +145,374 @@ export default function HomePage() {
   const getInitials = (name: string) => name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-white">
-      {/* Hero Media - full width banner */}
-      <div className="w-full">
-        <HeroMedia />
-      </div>
-
-      {/* Animated Count & CTA */}
-      <div className="max-w-lg mx-auto px-5 pt-6 pb-6 text-center">
-        {/* Animated Count */}
-        <div className="inline-flex items-center gap-2 bg-white px-5 py-3 rounded-full border border-[var(--border)] shadow-sm mb-6">
-          <Users size={16} className="text-[var(--primary)]" />
-          <div className="relative h-7 overflow-hidden">
-            <span className={`text-lg font-bold text-[var(--primary)] transition-all duration-500 ${showVisited ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100"}`}>
-              {displayCount.toLocaleString()}
-            </span>
-            <span className={`absolute inset-0 flex items-center text-lg font-bold text-[var(--primary)] transition-all duration-500 ${showVisited ? "translate-y-0 opacity-100" : "translate-y-full opacity-0"}`}>
-              {visitedCount.toLocaleString()}
-            </span>
+    <main className="min-h-screen bg-white">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-emerald-900 min-h-[600px]">
+        {/* Animated Background Elements */}
+        <div className="absolute inset-0 overflow-hidden">
+          {/* Map Grid Pattern */}
+          <svg className="absolute inset-0 w-full h-full opacity-10" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+                <path d="M 60 0 L 0 0 0 60" fill="none" stroke="white" strokeWidth="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)" />
+          </svg>
+          
+          {/* Floating Location Pins */}
+          <div className="absolute top-20 left-[15%] animate-bounce" style={{ animationDelay: "0s", animationDuration: "3s" }}>
+            <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-red-500/30">
+              <MapPin size={20} className="text-red-400" />
+            </div>
           </div>
-          <span className="text-xs text-[var(--text-secondary)]">{showVisited ? "total visits" : "households"}</span>
+          <div className="absolute top-32 right-[20%] animate-bounce" style={{ animationDelay: "1s", animationDuration: "3s" }}>
+            <div className="w-8 h-8 bg-emerald-500/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-emerald-500/30">
+              <Home size={16} className="text-emerald-400" />
+            </div>
+          </div>
+          <div className="absolute bottom-40 left-[25%] animate-bounce" style={{ animationDelay: "2s", animationDuration: "3s" }}>
+            <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-blue-500/30">
+              <Truck size={24} className="text-blue-400" />
+            </div>
+          </div>
+
+          {/* Route Lines */}
+          <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 100 200 Q 300 100 500 250 T 900 180" fill="none" stroke="url(#routeGradient)" strokeWidth="2" strokeDasharray="8 4" className="animate-pulse" />
+            <path d="M 50 400 Q 250 300 450 450 T 850 350" fill="none" stroke="url(#routeGradient2)" strokeWidth="2" strokeDasharray="8 4" className="animate-pulse" style={{ animationDelay: "1s" }} />
+            <defs>
+              <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.6" />
+              </linearGradient>
+              <linearGradient id="routeGradient2" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.4" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0.4" />
+              </linearGradient>
+            </defs>
+          </svg>
+
+          {/* Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-slate-900/40" />
         </div>
 
-        {/* CTA */}
-        <Link
-          href="/register"
-          className="w-full flex items-center justify-center gap-2 bg-[var(--primary)] text-white py-4 rounded-2xl font-semibold text-lg hover:bg-[var(--primary-dark)] transition shadow-lg shadow-green-200 active:scale-[0.98]"
-        >
-          Register Your Household
-          <ArrowRight size={20} />
-        </Link>
+        <div className="relative max-w-lg mx-auto px-5 pt-12 pb-16 text-center">
+          {/* Logo / Brand */}
+          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-full mb-8">
+            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-blue-500 rounded-lg flex items-center justify-center">
+              <MapPin size={16} className="text-white" />
+            </div>
+            <span className="text-white font-semibold text-sm tracking-wide">EN-ROUTE</span>
+          </div>
 
-        <div className="mt-3 flex items-center justify-center gap-4 text-sm">
-          <Link href="/dashboard" className="text-[var(--text-secondary)] hover:text-[var(--primary)] transition">
-            Go to Dashboard
+          {/* Hero Title */}
+          <h1 className="text-5xl md:text-6xl font-bold text-white mb-4 tracking-tight">
+            En-Route
+          </h1>
+          <p className="text-xl text-emerald-300 font-medium mb-4">
+            Register your household once. Get accurate deliveries forever.
+          </p>
+          <p className="text-base text-white/70 max-w-md mx-auto mb-8 leading-relaxed">
+            Ukhrul's smart household address registration system, making deliveries faster, easier, and more accurate for every home.
+          </p>
+
+          {/* Stats */}
+          <div className="flex items-center justify-center gap-8 mb-10">
+            <div className="text-center">
+              <div className="relative h-8 overflow-hidden">
+                <span className={`text-2xl font-bold text-white transition-all duration-500 ${showVisited ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100"}`}>
+                  {displayCount.toLocaleString()}
+                </span>
+                <span className={`absolute inset-0 flex items-center justify-center text-2xl font-bold text-white transition-all duration-500 ${showVisited ? "translate-y-0 opacity-100" : "translate-y-full opacity-0"}`}>
+                  {visitedCount.toLocaleString()}
+                </span>
+              </div>
+              <p className="text-xs text-white/60 mt-1">{showVisited ? "total visits" : "households registered"}</p>
+            </div>
+            <div className="w-px h-10 bg-white/20" />
+            <div className="text-center">
+              <p className="text-2xl font-bold text-emerald-400">100%</p>
+              <p className="text-xs text-white/60 mt-1">free to use</p>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <Link
+            href="/register"
+            className="inline-flex items-center gap-3 bg-gradient-to-r from-emerald-500 to-blue-500 text-white px-8 py-4 rounded-2xl font-semibold text-lg hover:from-emerald-600 hover:to-blue-600 transition-all shadow-xl shadow-emerald-500/25 active:scale-[0.98]"
+          >
+            Register Your Household
+            <ArrowRight size={20} />
           </Link>
-          <span className="text-[var(--border)]">|</span>
-          <Link href="/check" className="text-[var(--text-secondary)] hover:text-[var(--primary)] transition">
-            Check Status
-          </Link>
+
+          <div className="mt-4 flex items-center justify-center gap-6 text-sm">
+            <Link href="/dashboard" className="text-white/70 hover:text-white transition flex items-center gap-1">
+              Dashboard <ChevronRight size={14} />
+            </Link>
+            <Link href="/check" className="text-white/70 hover:text-white transition flex items-center gap-1">
+              Check Status <ChevronRight size={14} />
+            </Link>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="max-w-lg mx-auto px-5 space-y-5 pb-12">
-        {/* Active Areas */}
-        {areas.length > 0 && (
-          <Card className="border-[var(--primary)]/20">
-            <CardContent className="py-4">
-              <p className="text-sm font-medium mb-3 flex items-center gap-1.5">
-                <Navigation size={14} className="text-[var(--primary)]" /> Where We Are Mapping
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {areas.map((area) => (
-                  <div
-                    key={area.id}
-                    className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-sm font-medium"
-                  >
-                    <MapPin size={12} />
-                    {area.name}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+      {/* Features Section */}
+      <section className="py-16 bg-gradient-to-b from-gray-50 to-white">
+        <div className="max-w-lg mx-auto px-5">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl font-bold mb-2">How En-Route Works</h2>
+            <p className="text-sm text-gray-500">Four simple steps to a verified address</p>
+          </div>
 
-        {/* Quick Check */}
-        <Card className="border-[var(--primary)]/20">
-          <CardContent className="py-4">
-            <p className="text-sm font-medium mb-2 flex items-center gap-1.5">
-              <Search size={14} className="text-[var(--primary)]" /> Check Registration
-            </p>
-            <form onSubmit={handleSearch} className="flex gap-2">
-              <Input
-                placeholder="Phone number or name"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1"
-              />
-              <Button type="submit" size="sm" loading={searching}>Search</Button>
-            </form>
-            {searchResult && (
-              <div className="mt-3 pt-3 border-t border-[var(--border)]">
-                {searchResult.registered ? (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{searchResult.full_name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {searchResult.verification_status && (() => {
-                          const cfg = statusConfig[searchResult.verification_status];
-                          if (!cfg) return null;
-                          const Icon = cfg.icon;
-                          return (
-                            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${cfg.color}`}>
-                              <Icon size={10} /> {cfg.label}
-                            </span>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                    <Link href="/dashboard" className="text-[var(--primary)] text-sm font-medium flex items-center gap-0.5">
-                      Dashboard <ChevronRight size={14} />
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-[var(--text-secondary)]">Not registered yet</p>
-                    <Link href="/register" className="text-[var(--primary)] text-sm font-medium flex items-center gap-0.5">
-                      Register <ChevronRight size={14} />
-                    </Link>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Features */}
-        <button
-          onClick={() => setShowFeatures(!showFeatures)}
-          className="w-full flex items-center justify-between bg-white p-4 rounded-2xl border border-[var(--border)]"
-        >
-          <span className="text-sm font-medium">How it works</span>
-          <ChevronDown size={16} className={`text-[var(--text-secondary)] transition-transform ${showFeatures ? "rotate-180" : ""}`} />
-        </button>
-        {showFeatures && (
-          <div className="space-y-2 pl-1">
+          <div className="grid grid-cols-2 gap-4">
             <FeatureGuideTrigger guideKey="pin">
-              <div className="flex items-center gap-3 bg-white p-3.5 rounded-xl border border-[var(--border)] hover:border-[var(--primary)]/30 hover:bg-[var(--primary)]/5 transition cursor-pointer active:scale-[0.98]">
-                <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center shrink-0">
-                  <MapPin size={16} className="text-[var(--primary)]" />
+              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all group">
+                <div className="w-12 h-12 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                  <MapPin size={22} className="text-emerald-600" />
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Google Maps Pin</p>
-                  <p className="text-xs text-[var(--text-secondary)]">Drop a pin on your house</p>
-                </div>
-                <ChevronRight size={14} className="text-[var(--text-secondary)]" />
+                <h3 className="font-semibold text-sm mb-1">Create Address</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">Pin your exact location on the map</p>
               </div>
             </FeatureGuideTrigger>
+
             <FeatureGuideTrigger guideKey="photo">
-              <div className="flex items-center gap-3 bg-white p-3.5 rounded-xl border border-[var(--border)] hover:border-[var(--primary)]/30 hover:bg-[var(--primary)]/5 transition cursor-pointer active:scale-[0.98]">
-                <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center shrink-0">
-                  <CheckCircle size={16} className="text-[var(--primary)]" />
+              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all group">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                  <CheckCircle size={22} className="text-blue-600" />
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">House Photos</p>
-                  <p className="text-xs text-[var(--text-secondary)]">Up to 4 photos — front, gate, landmark, road</p>
-                </div>
-                <ChevronRight size={14} className="text-[var(--text-secondary)]" />
+                <h3 className="font-semibold text-sm mb-1">Add Photos</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">Upload up to 4 house photos</p>
               </div>
             </FeatureGuideTrigger>
+
             <FeatureGuideTrigger guideKey="member">
-              <div className="flex items-center gap-3 bg-white p-3.5 rounded-xl border border-[var(--border)] hover:border-[var(--primary)]/30 hover:bg-[var(--primary)]/5 transition cursor-pointer active:scale-[0.98]">
-                <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center shrink-0">
-                  <Users size={16} className="text-[var(--primary)]" />
+              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-purple-200 transition-all group">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                  <Users size={22} className="text-purple-600" />
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Add Household Members</p>
-                  <p className="text-xs text-[var(--text-secondary)]">Everyone at your address with a phone</p>
-                </div>
-                <ChevronRight size={14} className="text-[var(--text-secondary)]" />
+                <h3 className="font-semibold text-sm mb-1">Add Members</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">Register your whole household</p>
               </div>
             </FeatureGuideTrigger>
+
             <FeatureGuideTrigger guideKey="refer">
-              <div className="flex items-center gap-3 bg-white p-3.5 rounded-xl border border-[var(--border)] hover:border-[var(--primary)]/30 hover:bg-[var(--primary)]/5 transition cursor-pointer active:scale-[0.98]">
-                <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center shrink-0">
-                  <Trophy size={16} className="text-[var(--primary)]" />
+              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-amber-200 transition-all group">
+                <div className="w-12 h-12 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                  <Trophy size={22} className="text-amber-600" />
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Earn &amp; Refer</p>
-                  <p className="text-xs text-[var(--text-secondary)]">Up to 30 points + 10 per referral</p>
-                </div>
-                <ChevronRight size={14} className="text-[var(--text-secondary)]" />
+                <h3 className="font-semibold text-sm mb-1">Earn Points</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">Up to 30 points + 10 per referral</p>
               </div>
             </FeatureGuideTrigger>
           </div>
-        )}
+        </div>
+      </section>
 
-        {/* Leaderboard */}
-        {leaderboard.length > 0 && (
-          <Card>
-            <CardContent className="py-4">
-              <p className="text-sm font-medium mb-3 flex items-center gap-1.5">
-                <Trophy size={14} className="text-amber-500" /> Top Referrers
+      {/* Search Section */}
+      <section className="py-12 bg-white">
+        <div className="max-w-lg mx-auto px-5">
+          <Card className="border-gray-200 shadow-lg">
+            <CardContent className="py-5">
+              <p className="text-sm font-semibold mb-3 flex items-center gap-2">
+                <Search size={16} className="text-emerald-600" /> Quick Registration Check
               </p>
-              <div className="space-y-2">
-                {leaderboard.map((entry, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-semibold text-[var(--text-secondary)]">
-                        {getInitials(entry.full_name)}
-                      </span>
-                      <span className="text-sm">{getInitials(entry.full_name)}</span>
+              <form onSubmit={handleSearch} className="flex gap-2">
+                <Input
+                  placeholder="Enter phone number or name"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1"
+                />
+                <Button type="submit" loading={searching}>Search</Button>
+              </form>
+              {searchResult && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  {searchResult.registered ? (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold">{searchResult.full_name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {searchResult.verification_status && (() => {
+                            const cfg = statusConfig[searchResult.verification_status];
+                            if (!cfg) return null;
+                            const Icon = cfg.icon;
+                            return (
+                              <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${cfg.color}`}>
+                                <Icon size={10} /> {cfg.label}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                      <Link href="/dashboard" className="text-emerald-600 text-sm font-medium flex items-center gap-0.5 hover:text-emerald-700">
+                        Dashboard <ChevronRight size={14} />
+                      </Link>
                     </div>
-                    <span className="text-sm font-medium text-[var(--text-secondary)]">{entry.referral_count} referrals</span>
-                  </div>
-                ))}
-              </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-500">Not registered yet</p>
+                      <Link href="/register" className="text-emerald-600 text-sm font-medium flex items-center gap-0.5 hover:text-emerald-700">
+                        Register Now <ChevronRight size={14} />
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
-        )}
+        </div>
+      </section>
 
-        {/* More */}
-        <button
-          onClick={() => setShowMore(!showMore)}
-          className="w-full flex items-center justify-between bg-white p-4 rounded-2xl border border-[var(--border)]"
-        >
-          <div className="flex items-center gap-2">
-            <Info size={16} className="text-[var(--text-secondary)]" />
-            <span className="text-sm font-medium">More</span>
+      {/* Leaderboard */}
+      {leaderboard.length > 0 && (
+        <section className="py-12 bg-gradient-to-b from-white to-gray-50">
+          <div className="max-w-lg mx-auto px-5">
+            <Card className="border-gray-200 shadow-lg">
+              <CardContent className="py-5">
+                <p className="text-sm font-semibold mb-4 flex items-center gap-2">
+                  <Trophy size={16} className="text-amber-500" /> Top Referrers
+                </p>
+                <div className="space-y-3">
+                  {leaderboard.map((entry, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                          i === 0 ? "bg-amber-100 text-amber-700" : 
+                          i === 1 ? "bg-gray-100 text-gray-600" : 
+                          i === 2 ? "bg-orange-100 text-orange-700" : 
+                          "bg-gray-50 text-gray-500"
+                        }`}>
+                          {i + 1}
+                        </span>
+                        <span className="text-sm font-medium">{getInitials(entry.full_name)}</span>
+                      </div>
+                      <span className="text-sm text-gray-500">{entry.referral_count} referrals</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
-          <ChevronDown size={16} className={`text-[var(--text-secondary)] transition-transform ${showMore ? "rotate-180" : ""}`} />
-        </button>
-        {showMore && (
-          <div className="space-y-2 pl-1">
-            <Link
-              href="/about"
-              className="flex items-center gap-3 bg-white p-3.5 rounded-xl border border-[var(--border)] hover:border-[var(--primary)]/30 hover:bg-[var(--primary)]/5 transition"
-            >
-              <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center shrink-0">
-                <Info size={16} className="text-[var(--primary)]" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">About Us</p>
-                <p className="text-xs text-[var(--text-secondary)]">Learn about Project EN-ROUTE</p>
-              </div>
-              <ChevronRight size={14} className="text-[var(--text-secondary)]" />
-            </Link>
-            <Link
-              href="/privacy"
-              className="flex items-center gap-3 bg-white p-3.5 rounded-xl border border-[var(--border)] hover:border-[var(--primary)]/30 hover:bg-[var(--primary)]/5 transition"
-            >
-              <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center shrink-0">
-                <Info size={16} className="text-[var(--primary)]" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Privacy & Policy</p>
-                <p className="text-xs text-[var(--text-secondary)]">How we protect your data</p>
-              </div>
-              <ChevronRight size={14} className="text-[var(--text-secondary)]" />
-            </Link>
-          </div>
-        )}
+        </section>
+      )}
 
-        {/* Contact Us */}
-        <button
-          onClick={() => setShowContact(!showContact)}
-          className="w-full flex items-center justify-between bg-white p-4 rounded-2xl border border-[var(--border)]"
-        >
-          <div className="flex items-center gap-2">
-            <MessageCircle size={16} className="text-[var(--text-secondary)]" />
-            <span className="text-sm font-medium">Contact Us</span>
+      {/* More Options */}
+      <section className="py-12 bg-white">
+        <div className="max-w-lg mx-auto px-5 space-y-3">
+          <Link
+            href="/about"
+            className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-gray-200 hover:border-emerald-200 hover:shadow-md transition-all"
+          >
+            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
+              <Info size={18} className="text-emerald-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold">About En-Route</p>
+              <p className="text-xs text-gray-500">Learn about our mission for Ukhrul</p>
+            </div>
+            <ChevronRight size={16} className="text-gray-400" />
+          </Link>
+
+          <Link
+            href="/privacy"
+            className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-gray-200 hover:border-emerald-200 hover:shadow-md transition-all"
+          >
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+              <Shield size={18} className="text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold">Privacy & Policy</p>
+              <p className="text-xs text-gray-500">How we protect your data</p>
+            </div>
+            <ChevronRight size={16} className="text-gray-400" />
+          </Link>
+
+          <Link
+            href="/updates"
+            className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-gray-200 hover:border-emerald-200 hover:shadow-md transition-all"
+          >
+            <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+              <Info size={18} className="text-purple-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold">Updates</p>
+              {updates.length > 0 && (
+                <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full ml-2">{updates.length} new</span>
+              )}
+            </div>
+            <ChevronRight size={16} className="text-gray-400" />
+          </Link>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section className="py-12 bg-gray-50">
+        <div className="max-w-lg mx-auto px-5">
+          <div className="text-center mb-6">
+            <h2 className="text-lg font-bold mb-1">Get in Touch</h2>
+            <p className="text-sm text-gray-500">Questions? We&apos;re here to help</p>
           </div>
-          <ChevronDown size={16} className={`text-[var(--text-secondary)] transition-transform ${showContact ? "rotate-180" : ""}`} />
-        </button>
-        {showContact && (
-          <div className="space-y-2 pl-1">
+          <div className="grid grid-cols-2 gap-3">
             <a
               href="https://wa.me/917005498122"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 bg-white p-3.5 rounded-xl border border-[var(--border)] hover:border-green-300 hover:bg-green-50 transition"
+              className="flex flex-col items-center gap-2 bg-white p-5 rounded-2xl border border-gray-200 hover:border-green-300 hover:shadow-md transition-all"
             >
-              <div className="w-9 h-9 bg-green-50 rounded-lg flex items-center justify-center shrink-0">
-                <MessageCircle size={16} className="text-green-600" />
+              <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
+                <MessageCircle size={22} className="text-green-600" />
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">WhatsApp</p>
-                <p className="text-xs text-[var(--text-secondary)]">+91 7005498122</p>
+              <div className="text-center">
+                <p className="text-sm font-semibold">WhatsApp</p>
+                <p className="text-xs text-gray-500">+91 7005498122</p>
               </div>
             </a>
             <a
               href="mailto:hashtagdropee@gmail.com"
-              className="flex items-center gap-3 bg-white p-3.5 rounded-xl border border-[var(--border)] hover:border-red-300 hover:bg-red-50 transition"
+              className="flex flex-col items-center gap-2 bg-white p-5 rounded-2xl border border-gray-200 hover:border-red-300 hover:shadow-md transition-all"
             >
-              <div className="w-9 h-9 bg-red-50 rounded-lg flex items-center justify-center shrink-0">
-                <Mail size={16} className="text-red-600" />
+              <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center">
+                <Mail size={22} className="text-red-600" />
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Email</p>
-                <p className="text-xs text-[var(--text-secondary)]">hashtagdropee@gmail.com</p>
+              <div className="text-center">
+                <p className="text-sm font-semibold">Email</p>
+                <p className="text-xs text-gray-500">hashtagdropee@gmail.com</p>
               </div>
             </a>
           </div>
-        )}
-
-        {/* Updates */}
-        <Link
-          href="/updates"
-          className="w-full flex items-center justify-between bg-white p-4 rounded-2xl border border-[var(--border)] hover:border-[var(--primary)]/30 transition"
-        >
-          <div className="flex items-center gap-2">
-            <Info size={16} className="text-[var(--text-secondary)]" />
-            <span className="text-sm font-medium">Updates</span>
-            {updates.length > 0 && (
-              <span className="text-xs bg-[var(--primary)] text-white px-2 py-0.5 rounded-full">{updates.length}</span>
-            )}
-          </div>
-          <ChevronRight size={16} className="text-[var(--text-secondary)]" />
-        </Link>
-
-        <p className="text-center text-xs text-[var(--text-secondary)] pt-4">
-          A Hashtag Dropee Initiative — eX Holdings
-        </p>
-
-        <a
-          href="https://instagram.com/hashtagdropee"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 text-xs text-[var(--text-secondary)] hover:text-[var(--primary)] transition mt-2"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
-          </svg>
-          Follow us on Instagram @hashtagdropee
-        </a>
-
-        {/* Ad Banners */}
-        <div className="pt-4">
-          <AdBanner position="landing" />
         </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-8 bg-white border-t border-gray-100">
+        <div className="max-w-lg mx-auto px-5 text-center">
+          <div className="inline-flex items-center gap-2 mb-4">
+            <div className="w-6 h-6 bg-gradient-to-br from-emerald-400 to-blue-500 rounded-md flex items-center justify-center">
+              <MapPin size={12} className="text-white" />
+            </div>
+            <span className="text-sm font-semibold text-gray-700">EN-ROUTE</span>
+          </div>
+          <p className="text-xs text-gray-400 mb-4">
+            A Hashtag Dropee Initiative — eX Holdings
+          </p>
+          <a
+            href="https://instagram.com/hashtagdropee"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-pink-600 transition"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+            </svg>
+            Follow @hashtagdropee
+          </a>
+        </div>
+      </footer>
+
+      {/* Ad Banners */}
+      <div className="max-w-lg mx-auto px-5 pb-8">
+        <AdBanner position="landing" />
       </div>
     </main>
   );
