@@ -40,6 +40,8 @@ export default function HomePage() {
   const [displayCount, setDisplayCount] = useState(0);
   const [showVisited, setShowVisited] = useState(false);
   const [visitedCount, setVisitedCount] = useState(0);
+  const [areas, setAreas] = useState<{ name: string; is_active: boolean }[]>([]);
+  const [activeAreaIndex, setActiveAreaIndex] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -68,12 +70,27 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, [count]);
 
+  // Rotate active areas every 5 seconds
+  useEffect(() => {
+    const activeAreas = areas.filter((a) => a.is_active);
+    if (activeAreas.length <= 1) return;
+    const timer = setInterval(() => {
+      setActiveAreaIndex((i) => (i + 1) % activeAreas.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [areas]);
+
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
       .channel("page_views_live")
       .on("postgres_changes", { event: "*", schema: "public", table: "page_views" }, () => {
         fetch("/api/views").then((r) => r.json()).then((d) => setVisitedCount(d.count || 0)).catch(() => {});
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "areas" }, () => {
+        supabase.from("areas").select("name, is_active").order("created_at").then(({ data }) => {
+          if (data) setAreas(data);
+        });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -114,6 +131,12 @@ export default function HomePage() {
         const res = await fetch("/api/updates");
         const data = await res.json();
         setUpdates(data.updates || []);
+      } catch {}
+
+      // Fetch areas (active + inactive for display)
+      try {
+        const { data: areaData } = await supabase.from("areas").select("name, is_active").order("created_at");
+        if (areaData) setAreas(areaData);
       } catch {}
     } catch {}
   };
@@ -231,9 +254,43 @@ export default function HomePage() {
               <p className="text-xs text-white/60 mt-1">{showVisited ? "total visits" : "households registered"}</p>
             </div>
             <div className="w-px h-10 bg-white/20" />
-            <div className="text-center">
-              <p className="text-2xl font-bold text-emerald-400">100%</p>
-              <p className="text-xs text-white/60 mt-1">free to use</p>
+            <div className="text-center min-w-[120px]">
+              {areas.length > 0 ? (
+                <>
+                  <div className="relative h-8 overflow-hidden">
+                    {areas.filter((a) => a.is_active).map((area, i) => {
+                      const activeAreas = areas.filter((a) => a.is_active);
+                      const currentIndex = activeAreaIndex % activeAreas.length;
+                      const isActive = i === currentIndex;
+                      return (
+                        <span
+                          key={area.name}
+                          className={`absolute inset-0 flex items-center justify-center text-lg font-bold text-emerald-400 transition-all duration-500 ${
+                            isActive ? "translate-y-0 opacity-100" : "translate-y-full opacity-0"
+                          }`}
+                        >
+                          {area.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-white/60 mt-1">currently mapping</p>
+                  {areas.some((a) => !a.is_active) && (
+                    <div className="mt-1 flex flex-wrap justify-center gap-1">
+                      {areas.filter((a) => !a.is_active).map((area) => (
+                        <span key={area.name} className="text-[10px] text-white/40 line-through">
+                          {area.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-lg font-bold text-emerald-400">UKHRUL</p>
+                  <p className="text-xs text-white/60 mt-1">mapping area</p>
+                </>
+              )}
             </div>
           </div>
 
@@ -258,54 +315,67 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section className="py-16 bg-gradient-to-b from-gray-50 to-white">
+      <section className="py-12 bg-white">
         <div className="max-w-lg mx-auto px-5">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl font-bold mb-2">How En-Route Works</h2>
-            <p className="text-sm text-gray-500">Four simple steps to a verified address</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <FeatureGuideTrigger guideKey="pin">
-              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all group">
-                <div className="w-12 h-12 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition">
-                  <MapPin size={22} className="text-emerald-600" />
-                </div>
-                <h3 className="font-semibold text-sm mb-1">Create Address</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">Pin your exact location on the map</p>
+          <button
+            onClick={() => setShowFeatures(!showFeatures)}
+            className="w-full flex items-center justify-between bg-gradient-to-r from-gray-50 to-white p-4 rounded-2xl border border-gray-200 hover:border-emerald-200 transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-xl flex items-center justify-center">
+                <Info size={18} className="text-white" />
               </div>
-            </FeatureGuideTrigger>
-
-            <FeatureGuideTrigger guideKey="photo">
-              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all group">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition">
-                  <CheckCircle size={22} className="text-blue-600" />
-                </div>
-                <h3 className="font-semibold text-sm mb-1">Add Photos</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">Upload up to 4 house photos</p>
+              <div className="text-left">
+                <p className="text-sm font-semibold">How En-Route Works</p>
+                <p className="text-xs text-gray-500">Four simple steps to a verified address</p>
               </div>
-            </FeatureGuideTrigger>
+            </div>
+            <ChevronDown size={18} className={`text-gray-400 transition-transform ${showFeatures ? "rotate-180" : ""}`} />
+          </button>
 
-            <FeatureGuideTrigger guideKey="member">
-              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-purple-200 transition-all group">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition">
-                  <Users size={22} className="text-purple-600" />
+          {showFeatures && (
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <FeatureGuideTrigger guideKey="pin">
+                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all group">
+                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition">
+                    <MapPin size={18} className="text-emerald-600" />
+                  </div>
+                  <h3 className="font-semibold text-xs mb-0.5">Create Address</h3>
+                  <p className="text-[11px] text-gray-500 leading-relaxed">Pin your exact location on the map</p>
                 </div>
-                <h3 className="font-semibold text-sm mb-1">Add Members</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">Register your whole household</p>
-              </div>
-            </FeatureGuideTrigger>
+              </FeatureGuideTrigger>
 
-            <FeatureGuideTrigger guideKey="refer">
-              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-amber-200 transition-all group">
-                <div className="w-12 h-12 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition">
-                  <Trophy size={22} className="text-amber-600" />
+              <FeatureGuideTrigger guideKey="photo">
+                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all group">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition">
+                    <CheckCircle size={18} className="text-blue-600" />
+                  </div>
+                  <h3 className="font-semibold text-xs mb-0.5">Add Photos</h3>
+                  <p className="text-[11px] text-gray-500 leading-relaxed">Upload up to 4 house photos</p>
                 </div>
-                <h3 className="font-semibold text-sm mb-1">Earn Points</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">Up to 30 points + 10 per referral</p>
-              </div>
-            </FeatureGuideTrigger>
-          </div>
+              </FeatureGuideTrigger>
+
+              <FeatureGuideTrigger guideKey="member">
+                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-purple-200 transition-all group">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition">
+                    <Users size={18} className="text-purple-600" />
+                  </div>
+                  <h3 className="font-semibold text-xs mb-0.5">Add Members</h3>
+                  <p className="text-[11px] text-gray-500 leading-relaxed">Register your whole household</p>
+                </div>
+              </FeatureGuideTrigger>
+
+              <FeatureGuideTrigger guideKey="refer">
+                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-amber-200 transition-all group">
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition">
+                    <Trophy size={18} className="text-amber-600" />
+                  </div>
+                  <h3 className="font-semibold text-xs mb-0.5">Earn Points</h3>
+                  <p className="text-[11px] text-gray-500 leading-relaxed">Up to 30 points + 10 per referral</p>
+                </div>
+              </FeatureGuideTrigger>
+            </div>
+          )}
         </div>
       </section>
 
