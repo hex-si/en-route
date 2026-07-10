@@ -36,6 +36,7 @@ const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; co
 export default function AdminUserDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const id = params.id as string;
   const [user, setUser] = useState<UserData | null>(null);
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,18 +47,18 @@ export default function AdminUserDetailPage() {
   const [pendingStatus, setPendingStatus] = useState("");
 
   const fetchData = useCallback(async () => {
-    const res = await fetch(`/api/users/${params.id}`);
+    const res = await fetch(`/api/users/${id}`);
     if (res.ok) {
       const data = await res.json();
       setUser(data);
     }
-    const memberRes = await fetch(`/api/users/${params.id}/members`);
+    const memberRes = await fetch(`/api/users/${id}/members`);
     if (memberRes.ok) {
       const memberData = await memberRes.json();
       setMembers(memberData.members || []);
     }
     setLoading(false);
-  }, [params.id]);
+  }, [id]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -73,7 +74,7 @@ export default function AdminUserDetailPage() {
       if (status === "needs_clarification" && note) {
         body.clarification_note = note;
       }
-      const res = await fetch(`/api/users/${params.id}/status`, {
+      const res = await fetch(`/api/users/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -129,7 +130,7 @@ export default function AdminUserDetailPage() {
           <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${status.color}`}>
             <StatusIcon size={14} /> {status.label}
           </span>
-          <Button size="sm" variant="secondary" onClick={() => fetchData()}>
+          <Button size="sm" variant="secondary" onClick={() => fetchData()} loading={loading}>
             <RefreshCw size={14} />
           </Button>
         </div>
