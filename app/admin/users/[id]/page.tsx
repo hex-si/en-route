@@ -76,6 +76,10 @@ export default function AdminUserDetailPage() {
   const [editMapsLink, setEditMapsLink] = useState("");
   const [editLocationDesc, setEditLocationDesc] = useState("");
   const [editHouseType, setEditHouseType] = useState("");
+  const [editZoneId, setEditZoneId] = useState("");
+  const [editRegId, setEditRegId] = useState("");
+  const [editNewZoneName, setEditNewZoneName] = useState("");
+  const [zones, setZones] = useState<{ id: string; name: string }[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -134,6 +138,18 @@ export default function AdminUserDetailPage() {
     const interval = setInterval(() => { fetchData(); }, 10000);
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  useEffect(() => {
+    const fetchZones = async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data } = await supabase.from("zones").select("id, name").order("name");
+        if (data) setZones(data);
+      } catch {}
+    };
+    fetchZones();
+  }, []);
 
   const updateStatus = async (status: string, note?: string) => {
     setUpdating(true);
@@ -251,12 +267,54 @@ export default function AdminUserDetailPage() {
     setEditMapsLink(user.maps_link || "");
     setEditLocationDesc(user.location_desc || "");
     setEditHouseType(user.house_type || "");
+    setEditZoneId(user.zone_id || "");
+    setEditRegId(user.household_registration_id || "");
+    setEditNewZoneName("");
     setEditing(true);
   };
 
   const handleSaveEdit = async () => {
     setSavingEdit(true);
     try {
+      let finalZoneId = editZoneId;
+
+      if (editNewZoneName.trim()) {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const zoneNameVal = editNewZoneName.trim();
+
+        let { data: zone } = await supabase
+          .from("zones")
+          .select("id")
+          .eq("name", zoneNameVal)
+          .single();
+
+        if (!zone) {
+          const prefix = zoneNameVal
+            .split(/\s+/)
+            .map((w: string) => w[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 3);
+          const { data: newZone } = await supabase
+            .from("zones")
+            .insert({ name: zoneNameVal, prefix })
+            .select("id")
+            .single();
+          zone = newZone;
+          if (zone) setZones((prev) => [...prev, { id: zone!.id, name: zoneNameVal }].sort((a, b) => a.name.localeCompare(b.name)));
+        }
+        if (zone) finalZoneId = zone.id;
+      }
+
+      let finalRegId = editRegId;
+      if (finalZoneId && !finalRegId) {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data: regId } = await supabase.rpc("generate_household_registration_id", { zone_uuid: finalZoneId });
+        if (regId) finalRegId = regId;
+      }
+
       const res = await fetch(`/api/users/${id}/update`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -266,6 +324,8 @@ export default function AdminUserDetailPage() {
           maps_link: editMapsLink,
           location_desc: editLocationDesc,
           house_type: editHouseType || null,
+          zone_id: finalZoneId || null,
+          household_registration_id: finalRegId || null,
         }),
       });
       if (!res.ok) throw new Error("Failed");
@@ -276,7 +336,13 @@ export default function AdminUserDetailPage() {
         maps_link: editMapsLink,
         location_desc: editLocationDesc,
         house_type: editHouseType || null,
+        zone_id: finalZoneId || null,
+        household_registration_id: finalRegId || null,
       } : null);
+      if (finalZoneId) {
+        const matchedZone = zones.find((z) => z.id === finalZoneId) || (editNewZoneName.trim() ? { name: editNewZoneName.trim() } : null);
+        if (matchedZone) setZoneName(matchedZone.name);
+      }
       setEditing(false);
       toast.success("User updated");
     } catch {
@@ -626,6 +692,39 @@ export default function AdminUserDetailPage() {
                   <option value="owned">Owned</option>
                   <option value="rent">Rented</option>
                 </select>
+              </div>
+              <div className="border-t border-[var(--border)] pt-3 mt-3">
+                <p className="text-xs font-medium text-[var(--text)] mb-2">Zone & Registration</p>
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] mb-1 block">Zone</label>
+                <select value={editZoneId} onChange={(e) => { setEditZoneId(e.target.value); setEditNewZoneName(""); }} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 bg-white">
+                  <option value="">No zone</option>
+                  {zones.map((z) => (
+                    <option key={z.id} value={z.id}>{z.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] mb-1 block">Or Create New Zone</label>
+                <input
+                  type="text"
+                  value={editNewZoneName}
+                  onChange={(e) => { setEditNewZoneName(e.target.value); setEditZoneId(""); }}
+                  placeholder="e.g. Phungreitang – East"
+                  className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] mb-1 block">Household Registration ID</label>
+                <input
+                  type="text"
+                  value={editRegId}
+                  onChange={(e) => setEditRegId(e.target.value)}
+                  placeholder="Auto-generated if zone is set"
+                  className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 font-mono"
+                />
+                <p className="text-[10px] text-[var(--text-secondary)] mt-1">Leave blank to auto-generate from zone</p>
               </div>
             </div>
             <div className="flex gap-3 mt-5">
