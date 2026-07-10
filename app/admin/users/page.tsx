@@ -19,6 +19,8 @@ interface User {
   points: number;
   verification_status: string;
   created_at: string;
+  household_registration_id: string | null;
+  zone_id: string | null;
 }
 
 export default function AdminUsersPage() {
@@ -71,7 +73,7 @@ export default function AdminUsersPage() {
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <form onSubmit={handleSearch} className="flex gap-2 flex-1 sm:flex-none">
-            <Input placeholder="Search name or phone..." value={search} onChange={(e) => setSearch(e.target.value)} className="sm:w-64" />
+            <Input placeholder="Search name, phone, or ID..." value={search} onChange={(e) => setSearch(e.target.value)} className="sm:w-64" />
             <Button type="submit" size="sm"><Search size={16} /></Button>
           </form>
           <Button size="sm" variant="secondary" onClick={() => fetchUsers()} loading={loading}>
@@ -105,6 +107,9 @@ export default function AdminUsersPage() {
                   <div>
                     <p className="font-medium text-sm">{user.full_name}</p>
                     <p className="text-xs text-[var(--text-secondary)]">{user.phone}</p>
+                    {user.household_registration_id && (
+                      <p className="text-xs font-mono text-[var(--primary)]">{user.household_registration_id}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[user.verification_status] || ""}`}>

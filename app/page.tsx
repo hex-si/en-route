@@ -197,6 +197,7 @@ export default function HomePage() {
           </Link>
           <div className="mt-3 flex items-center justify-center gap-5 text-sm">
             <Link href="/dashboard" className="text-white/70 hover:text-white transition flex items-center gap-1">Dashboard <ChevronRight size={12} /></Link>
+            <Link href="/member-dashboard" className="text-white/70 hover:text-white transition flex items-center gap-1">Member <ChevronRight size={12} /></Link>
             <Link href="/check" className="text-white/70 hover:text-white transition flex items-center gap-1">Check Status <ChevronRight size={12} /></Link>
           </div>
         </div>

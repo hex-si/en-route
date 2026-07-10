@@ -1,5 +1,5 @@
 ﻿"use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { MapPin, ArrowLeft, Plus, X, Navigation } from "lucide-react";
@@ -19,18 +19,33 @@ interface Member {
   phone: string;
 }
 
+interface Zone {
+  id: string;
+  name: string;
+  prefix: string;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
     mapsLink: "",
     locationDesc: "",
     houseType: "",
+    zoneId: "",
   });
+
+  useEffect(() => {
+    fetch("/api/zones")
+      .then((r) => r.json())
+      .then((d) => setZones(d.zones || []))
+      .catch(() => {});
+  }, []);
 
   const points = useMemo(() => calculatePoints({
     fullName: form.fullName,
@@ -57,8 +72,8 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.fullName || !form.phone || !form.mapsLink) {
-      toast.error("Name, phone, and Google Maps link are required");
+    if (!form.fullName || !form.phone || !form.mapsLink || !form.zoneId) {
+      toast.error("Name, phone, Google Maps link, and Zone are required");
       return;
     }
     setLoading(true);
@@ -78,6 +93,17 @@ export default function RegisterPage() {
         if (referrer) referredBy = referrer.id;
       }
 
+      // Generate household registration ID via RPC
+      const { data: regId, error: regIdError } = await supabase.rpc(
+        "generate_household_registration_id",
+        { zone_uuid: form.zoneId }
+      );
+      if (regIdError) {
+        toast.error("Failed to generate registration ID. Please try again.");
+        setLoading(false);
+        return;
+      }
+
       const { data: user, error: userError } = await supabase
         .from("users")
         .insert({
@@ -90,6 +116,8 @@ export default function RegisterPage() {
           points,
           referral_code: referralCode,
           referred_by: referredBy,
+          zone_id: form.zoneId,
+          household_registration_id: regId,
         })
         .select("id")
         .single();
@@ -195,6 +223,25 @@ export default function RegisterPage() {
             required
           />
 
+          {/* Zone Selection */}
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Zone <span className="text-[var(--error)]">*</span>
+            </label>
+            <select
+              value={form.zoneId}
+              onChange={(e) => update("zoneId", e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition text-sm"
+              required
+            >
+              <option value="">Select your zone...</option>
+              {zones.map((z) => (
+                <option key={z.id} value={z.id}>{z.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-[var(--text-secondary)]">Used to generate your Household Registration ID</p>
+          </div>
+
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-[var(--text)]">
               Google Maps Location Link <span className="text-[var(--error)]">*</span>
@@ -213,7 +260,7 @@ export default function RegisterPage() {
               >
                 <Navigation size={12} /> Open Google Maps
               </button>
-              <span className="text-xs text-[var(--text-secondary)]">• Drop a pin, tap Share, copy link</span>
+              <span className="text-xs text-[var(--text-secondary)]">- Drop a pin, tap Share, copy link</span>
             </div>
           </div>
 
@@ -296,4 +343,3 @@ export default function RegisterPage() {
     </main>
   );
 }
-

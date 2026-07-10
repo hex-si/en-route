@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { createClient } from "@/lib/supabase/client";
+import { maskFullName } from "@/lib/privacy";
 
 interface SearchResult {
   registered: boolean;
   full_name?: string;
   verification_status?: string;
   points?: number;
+  household_registration_id?: string;
 }
 
 const statusConfig = {
@@ -36,10 +38,18 @@ export default function CheckPage() {
       const isPhone = /^\+?\d+$/.test(query.trim());
       let data = null;
       if (isPhone) {
-        const { data: d } = await supabase.from("users").select("full_name, verification_status, points").eq("phone", query.trim()).single();
+        const { data: d } = await supabase
+          .from("users")
+          .select("full_name, verification_status, points, household_registration_id")
+          .eq("phone", query.trim())
+          .single();
         data = d;
       } else {
-        const { data: d } = await supabase.from("users").select("full_name, verification_status, points").ilike("full_name", `%${query.trim()}%`).single();
+        const { data: d } = await supabase
+          .from("users")
+          .select("full_name, verification_status, points, household_registration_id")
+          .ilike("full_name", `%${query.trim()}%`)
+          .single();
         data = d;
       }
       setResult(data ? { registered: true, ...data } : { registered: false });
@@ -80,7 +90,12 @@ export default function CheckPage() {
                 <>
                   <CheckCircle size={48} className="mx-auto text-[var(--primary)] mb-4" />
                   <h2 className="text-lg font-bold mb-1">You&apos;re registered!</h2>
-                  <p className="text-sm text-[var(--text-secondary)] mb-3">{result.full_name}</p>
+                  <p className="text-sm text-[var(--text-secondary)] mb-3">{maskFullName(result.full_name || "")}</p>
+                  {result.household_registration_id && (
+                    <p className="text-sm font-mono font-medium text-[var(--primary)] mb-2">
+                      ID: {result.household_registration_id}
+                    </p>
+                  )}
                   {result.verification_status && (
                     <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${statusConfig[result.verification_status as keyof typeof statusConfig]?.color || ""}`}>
                       {(() => {

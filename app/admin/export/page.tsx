@@ -12,19 +12,20 @@ export default function AdminExportPage() {
     const res = await fetch("/api/users?limit=10000", {
       headers: { "x-admin-key": process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "" },
     });
-    return (await res.json()).users || [];
+    const data = await res.json();
+    return data.users || [];
   };
 
   const exportCSV = async () => {
     setLoading("csv");
     try {
       const users = await fetchUsers();
-      const headers = ["Name", "Phone", "Maps Link", "Location Description", "Photos", "Spouse Name", "Spouse Phone", "Family Name", "Family Phone", "Points", "Referral Code", "Verification Status", "Registered At"];
+      const headers = ["Registration ID", "Name", "Phone", "Zone", "Maps Link", "Location Description", "Photos", "Points", "Referral Code", "Verification Status", "House Type", "Registered At"];
       const rows = users.map((u: any) => [
-        u.full_name, u.phone, u.maps_link, u.location_desc || "",
-        (u.photos || []).join("; "), u.spouse_name || "", u.spouse_phone || "",
-        u.family_name || "", u.family_phone || "", u.points,
-        u.referral_code, u.verification_status, new Date(u.created_at).toISOString(),
+        u.household_registration_id || "", u.full_name, u.phone, u.zone_id || "",
+        u.maps_link, u.location_desc || "",
+        (u.photos || []).join("; "), u.points,
+        u.referral_code, u.verification_status, u.house_type || "", new Date(u.created_at).toISOString(),
       ]);
       const csv = [headers.join(","), ...rows.map((r: any[]) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
       const blob = new Blob([csv], { type: "text/csv" });
@@ -55,8 +56,8 @@ export default function AdminExportPage() {
 <h1>En-Route Users Report</h1>
 <p>Generated: ${new Date().toLocaleString()}</p>
 <p>Total: ${users.length} households</p>
-<table><thead><tr><th>Name</th><th>Phone</th><th>Maps Link</th><th>Description</th><th>Points</th><th>Status</th><th>Date</th></tr></thead><tbody>
-${users.map((u: any) => `<tr><td>${u.full_name}</td><td>${u.phone}</td><td><a href="${u.maps_link}">Maps</a></td><td>${u.location_desc || ""}</td><td>${u.points}</td><td>${u.verification_status}</td><td>${new Date(u.created_at).toLocaleDateString()}</td></tr>`).join("")}
+<table><thead><tr><th>Reg ID</th><th>Name</th><th>Phone</th><th>Maps Link</th><th>Description</th><th>Points</th><th>Status</th><th>House Type</th><th>Date</th></tr></thead><tbody>
+${users.map((u: any) => `<tr><td>${u.household_registration_id || ""}</td><td>${u.full_name}</td><td>${u.phone}</td><td><a href="${u.maps_link}">Maps</a></td><td>${u.location_desc || ""}</td><td>${u.points}</td><td>${u.verification_status}</td><td>${u.house_type || ""}</td><td>${new Date(u.created_at).toLocaleDateString()}</td></tr>`).join("")}
 </tbody></table></body></html>`;
       const blob = new Blob([html], { type: "text/html" });
       const url = URL.createObjectURL(blob);

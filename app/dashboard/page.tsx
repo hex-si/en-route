@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users, Trophy, Copy, ArrowLeft, Star, Send, CheckCircle, Clock, XCircle, Phone, LogIn, AlertCircle, Camera, MessageCircle } from "lucide-react";
+import { Users, Trophy, Copy, ArrowLeft, Star, Send, CheckCircle, Clock, XCircle, Phone, LogIn, AlertCircle, Camera, MessageCircle, Home } from "lucide-react";
 import toast from "react-hot-toast";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -27,6 +27,8 @@ interface UserData {
   maps_link: string;
   house_type: string | null;
   head_user_id: string | null;
+  household_registration_id: string | null;
+  zone_id: string | null;
 }
 
 interface HouseholdMember {
@@ -375,6 +377,9 @@ export default function DashboardPage() {
               </Button>
             </form>
             <div className="mt-4 text-center space-y-2">
+              <Link href="/member-dashboard" className="text-sm text-[var(--primary)] hover:underline font-medium">
+                Household Member login
+              </Link>
               <Link href="/check" className="text-sm text-[var(--text-secondary)] hover:text-[var(--primary)]">
                 Check registration status
               </Link>
@@ -414,15 +419,15 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-[var(--bg)]">
       <div className="max-w-lg mx-auto px-5 py-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold">Dashboard</h1>
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-sm text-[var(--text-secondary)] hover:text-[var(--primary)]">
+            <button onClick={() => router.back()} className="p-2 text-[var(--text-secondary)] hover:text-[var(--primary)] hover:bg-gray-100 rounded-lg transition">
               <ArrowLeft size={18} />
-            </Link>
-            <button onClick={handleLogout} className="text-xs text-[var(--text-secondary)] hover:text-[var(--error)]">
-              Logout
             </button>
+            <h1 className="text-xl font-bold">Dashboard</h1>
           </div>
+          <button onClick={handleLogout} className="text-xs text-[var(--text-secondary)] hover:text-[var(--error)]">
+            Logout
+          </button>
         </div>
 
         {/* Hero Stats */}
@@ -438,6 +443,16 @@ export default function DashboardPage() {
               </span>
             )}
           </div>
+          {/* Household Registration ID */}
+          {user.household_registration_id && (
+            <div className="bg-white/15 rounded-xl px-4 py-2.5 mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-white/70">Household Registration ID</p>
+                <p className="text-lg font-mono font-bold tracking-wider">{user.household_registration_id}</p>
+              </div>
+              <Home size={20} className="text-white/60" />
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div className="text-center">
               <p className="text-3xl font-bold">{totalHouseholds.toLocaleString()}</p>

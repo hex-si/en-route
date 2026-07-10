@@ -19,6 +19,9 @@ interface UserData {
   referral_code: string;
   house_type: string | null;
   created_at: string;
+  household_registration_id: string | null;
+  zone_id: string | null;
+  head_user_id: string | null;
 }
 
 interface HouseholdMember {
@@ -63,12 +66,20 @@ export default function AdminUserDetailPage() {
   const [showClarificationModal, setShowClarificationModal] = useState(false);
   const [clarificationNote, setClarificationNote] = useState("");
   const [pendingStatus, setPendingStatus] = useState("");
+  const [zoneName, setZoneName] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/users/${id}`);
     if (res.ok) {
       const data = await res.json();
       setUser(data);
+      // Fetch zone name
+      if (data.zone_id) {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data: zone } = await supabase.from("zones").select("name").eq("id", data.zone_id).single();
+        setZoneName(zone?.name || null);
+      }
     }
     const memberRes = await fetch(`/api/users/${id}/members`);
     if (memberRes.ok) {
@@ -177,6 +188,12 @@ export default function AdminUserDetailPage() {
         <div>
           <h1 className="text-xl font-bold">{user.full_name}</h1>
           <p className="text-sm text-[var(--text-secondary)]">{user.phone}</p>
+          {user.household_registration_id && (
+            <p className="text-sm font-mono font-medium text-[var(--primary)] mt-1">ID: {user.household_registration_id}</p>
+          )}
+          {zoneName && (
+            <p className="text-xs text-[var(--text-secondary)] mt-0.5">Zone: {zoneName}</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${status.color}`}>
@@ -282,6 +299,18 @@ export default function AdminUserDetailPage() {
         <Card>
           <CardHeader><h2 className="font-semibold text-sm">Details</h2></CardHeader>
           <CardContent className="space-y-4">
+            {user.household_registration_id && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[var(--text-secondary)]">Registration ID</span>
+                <code className="text-sm font-mono font-medium text-[var(--primary)]">{user.household_registration_id}</code>
+              </div>
+            )}
+            {zoneName && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[var(--text-secondary)]">Zone</span>
+                <span className="text-sm font-medium">{zoneName}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-sm text-[var(--text-secondary)]">Points</span>
               <span className="font-bold text-lg text-[var(--primary)]">{user.points}/30</span>

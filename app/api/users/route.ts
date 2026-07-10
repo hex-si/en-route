@@ -10,9 +10,14 @@ export async function GET(request: Request) {
   const limit = 20;
   const offset = (page - 1) * limit;
 
-  let query = supabase.from("users").select("id, full_name, phone, points, verification_status, created_at, house_type", { count: "exact" });
+  let query = supabase
+    .from("users")
+    .select("id, full_name, phone, points, verification_status, created_at, house_type, household_registration_id, zone_id", { count: "exact" });
+
   if (search) {
-    query = query.or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`);
+    query = query.or(
+      `full_name.ilike.%${search}%,phone.ilike.%${search}%,household_registration_id.ilike.%${search}%`
+    );
   }
   if (status) {
     query = query.eq("verification_status", status);

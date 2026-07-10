@@ -31,20 +31,46 @@ export async function PATCH(request: Request) {
       if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    // Independence request: detach the member from the head's household so they
-    // become a fully independent head who can manage their own members.
+    // Independence request: detach the member from the head's household,
+    // generate a new household_registration_id in the same zone, and make
+    // them an independent household head.
     if (status === "approved" && req.field === "independent_household") {
-      const { error: deleteError } = await supabase
+      // 1. Find the old household head to get the zone
+      const { data: memberUser } = await supabase
+        .from("users")
+        .select("head_user_id, zone_id")
+        .eq("id", req.user_id)
+        .single();
+
+      // 2. Remove from old household's member list
+      await supabase
         .from("household_members")
         .delete()
         .eq("promoted_user_id", req.user_id);
-      if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
 
-      const { error: headError } = await supabase
+      // 3. Use the old head's zone if the member doesn't have one
+      const zoneId = memberUser?.zone_id || (memberUser?.head_user_id
+        ? (await supabase.from("users").select("zone_id").eq("id", memberUser.head_user_id).single()).data?.zone_id
+        : null);
+
+      // 4. Generate new household_registration_id if zone exists
+      let newRegId = null;
+      if (zoneId) {
+        const { data: regId } = await supabase.rpc("generate_household_registration_id", {
+          zone_uuid: zoneId,
+        });
+        newRegId = regId;
+      }
+
+      // 5. Update user to be independent head with new ID
+      const updateData: Record<string, unknown> = { head_user_id: null };
+      if (newRegId) updateData.household_registration_id = newRegId;
+      if (zoneId) updateData.zone_id = zoneId;
+
+      await supabase
         .from("users")
-        .update({ head_user_id: null })
+        .update(updateData)
         .eq("id", req.user_id);
-      if (headError) return NextResponse.json({ error: headError.message }, { status: 500 });
     }
 
     const { error: resolveError } = await supabase
