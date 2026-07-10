@@ -71,12 +71,33 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, [count]);
 
+  // Realtime page_views subscription
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("page_views_live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "page_views" }, () => {
+        fetch("/api/views").then((r) => r.json()).then((d) => setVisitedCount(d.count || 0)).catch(() => {});
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   const loadData = async () => {
     try {
       const supabase = createClient();
       const { count: c } = await supabase.from("users").select("*", { count: "exact", head: true });
       setCount(c || 0);
-      setVisitedCount(Math.floor((c || 0) * 2.5) + 47);
+
+      // Record this visit
+      fetch("/api/views", { method: "POST" }).catch(() => {});
+
+      // Get real visit count
+      try {
+        const vRes = await fetch("/api/views");
+        const vData = await vRes.json();
+        setVisitedCount(vData.count || 0);
+      } catch {}
 
       const { data: allRefs } = await supabase.from("referrals").select("referrer_id");
       if (allRefs && allRefs.length > 0) {

@@ -3,5 +3,15 @@
   "main": ".open-next/worker.js",
   "account_id": "0aebe6dcaece2237bd1786924ea5e348",
   "compatibility_date": "2026-07-09",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "routes": [
+    {
+      "pattern": "enroute.discoverukhrul.site/*",
+      "zone_name": "discoverukhrul.site"
+    }
+  ]
 }
