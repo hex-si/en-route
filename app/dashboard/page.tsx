@@ -29,6 +29,7 @@ interface UserData {
   head_user_id: string | null;
   household_registration_id: string | null;
   zone_id: string | null;
+  area_id: string | null;
 }
 
 interface HouseholdMember {
@@ -101,6 +102,7 @@ export default function DashboardPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [zoneInput, setZoneInput] = useState("");
   const [savingZone, setSavingZone] = useState(false);
+  const [areaName, setAreaName] = useState<string | null>(null);
 
   useEffect(() => {
     const savedPhone = localStorage.getItem("en-route-phone");
@@ -166,6 +168,14 @@ export default function DashboardPage() {
       setEditPhotos(userData.photos || []);
       setShowLoginForm(false);
       localStorage.setItem("en-route-phone", q);
+
+      // Fetch area name if user has area_id
+      if (userData.area_id) {
+        const { data: areaData } = await supabase.from("areas").select("name").eq("id", userData.area_id).single();
+        setAreaName(areaData?.name || null);
+      } else {
+        setAreaName(null);
+      }
 
       const { count } = await supabase.from("users").select("*", { count: "exact", head: true });
       setTotalHouseholds(count || 0);
@@ -292,7 +302,7 @@ export default function DashboardPage() {
       // Generate household registration ID
       const { data: regId, error: regIdError } = await supabase.rpc(
         "generate_household_registration_id",
-        { zone_uuid: zone.id }
+        { zone_uuid: zone.id, area_uuid: null }
       );
       if (regIdError) {
         toast.error("Failed to generate ID");
@@ -535,6 +545,9 @@ export default function DashboardPage() {
               <div>
                 <p className="text-xs text-white/70">Household Registration ID</p>
                 <p className="text-lg font-mono font-bold tracking-wider">{user.household_registration_id}</p>
+                {areaName && (
+                  <p className="text-[10px] text-white/50 mt-0.5">Area: {areaName}</p>
+                )}
               </div>
               <Home size={20} className="text-white/60" />
             </div>

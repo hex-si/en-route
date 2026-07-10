@@ -21,6 +21,7 @@ interface UserData {
   created_at: string;
   household_registration_id: string | null;
   zone_id: string | null;
+  area_id: string | null;
   head_user_id: string | null;
 }
 
@@ -67,6 +68,7 @@ export default function AdminUserDetailPage() {
   const [clarificationNote, setClarificationNote] = useState("");
   const [pendingStatus, setPendingStatus] = useState("");
   const [zoneName, setZoneName] = useState<string | null>(null);
+  const [areaName, setAreaName] = useState<string | null>(null);
   const [zoneInput, setZoneInput] = useState("");
   const [savingZone, setSavingZone] = useState(false);
 
@@ -77,9 +79,11 @@ export default function AdminUserDetailPage() {
   const [editLocationDesc, setEditLocationDesc] = useState("");
   const [editHouseType, setEditHouseType] = useState("");
   const [editZoneId, setEditZoneId] = useState("");
+  const [editAreaId, setEditAreaId] = useState("");
   const [editRegId, setEditRegId] = useState("");
   const [editNewZoneName, setEditNewZoneName] = useState("");
   const [zones, setZones] = useState<{ id: string; name: string }[]>([]);
+  const [editAreas, setEditAreas] = useState<{ id: string; name: string; code: string }[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -95,6 +99,14 @@ export default function AdminUserDetailPage() {
         const supabase = createClient();
         const { data: zone } = await supabase.from("zones").select("name").eq("id", data.zone_id).single();
         setZoneName(zone?.name || null);
+      }
+      if (data.area_id) {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data: area } = await supabase.from("areas").select("name").eq("id", data.area_id).single();
+        setAreaName(area?.name || null);
+      } else {
+        setAreaName(null);
       }
     }
     const memberRes = await fetch(`/api/users/${id}/members`);
@@ -230,7 +242,7 @@ export default function AdminUserDetailPage() {
 
       const { data: regId, error: regIdError } = await supabase.rpc(
         "generate_household_registration_id",
-        { zone_uuid: zone.id }
+        { zone_uuid: zone.id, area_uuid: null }
       );
       if (regIdError) {
         toast.error("Failed to generate ID");
@@ -260,7 +272,7 @@ export default function AdminUserDetailPage() {
     }
   };
 
-  const startEditing = () => {
+  const startEditing = async () => {
     if (!user) return;
     setEditName(user.full_name);
     setEditPhone(user.phone);
@@ -268,15 +280,28 @@ export default function AdminUserDetailPage() {
     setEditLocationDesc(user.location_desc || "");
     setEditHouseType(user.house_type || "");
     setEditZoneId(user.zone_id || "");
+    setEditAreaId(user.area_id || "");
     setEditRegId(user.household_registration_id || "");
     setEditNewZoneName("");
     setEditing(true);
+
+    if (user.zone_id) {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data } = await supabase.from("areas").select("id, name, code").eq("zone_id", user.zone_id).order("name");
+        if (data) setEditAreas(data);
+      } catch {
+        setEditAreas([]);
+      }
+    }
   };
 
   const handleSaveEdit = async () => {
     setSavingEdit(true);
     try {
       let finalZoneId = editZoneId;
+      let finalAreaId = editAreaId;
 
       if (editNewZoneName.trim()) {
         const { createClient } = await import("@/lib/supabase/client");
@@ -311,7 +336,10 @@ export default function AdminUserDetailPage() {
       if (finalZoneId && !finalRegId) {
         const { createClient } = await import("@/lib/supabase/client");
         const supabase = createClient();
-        const { data: regId } = await supabase.rpc("generate_household_registration_id", { zone_uuid: finalZoneId });
+        const { data: regId } = await supabase.rpc("generate_household_registration_id", {
+          zone_uuid: finalZoneId,
+          area_uuid: finalAreaId || null,
+        });
         if (regId) finalRegId = regId;
       }
 
@@ -325,6 +353,7 @@ export default function AdminUserDetailPage() {
           location_desc: editLocationDesc,
           house_type: editHouseType || null,
           zone_id: finalZoneId || null,
+          area_id: finalAreaId || null,
           household_registration_id: finalRegId || null,
         }),
       });
@@ -337,11 +366,18 @@ export default function AdminUserDetailPage() {
         location_desc: editLocationDesc,
         house_type: editHouseType || null,
         zone_id: finalZoneId || null,
+        area_id: finalAreaId || null,
         household_registration_id: finalRegId || null,
       } : null);
       if (finalZoneId) {
         const matchedZone = zones.find((z) => z.id === finalZoneId) || (editNewZoneName.trim() ? { name: editNewZoneName.trim() } : null);
         if (matchedZone) setZoneName(matchedZone.name);
+      }
+      if (finalAreaId) {
+        const matchedArea = editAreas.find((a) => a.id === finalAreaId);
+        if (matchedArea) setAreaName(matchedArea.name);
+      } else {
+        setAreaName(null);
       }
       setEditing(false);
       toast.success("User updated");
@@ -418,7 +454,7 @@ export default function AdminUserDetailPage() {
             <p className="text-sm font-mono font-medium text-[var(--primary)] mt-1">ID: {user.household_registration_id}</p>
           )}
           {zoneName && (
-            <p className="text-xs text-[var(--text-secondary)] mt-0.5">Zone: {zoneName}</p>
+            <p className="text-xs text-[var(--text-secondary)] mt-0.5">Zone: {zoneName}{areaName ? ` > ${areaName}` : ""}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -553,7 +589,7 @@ export default function AdminUserDetailPage() {
             {zoneName && (
               <div className="flex items-center justify-between">
                 <span className="text-sm text-[var(--text-secondary)]">Zone</span>
-                <span className="text-sm font-medium">{zoneName}</span>
+                <span className="text-sm font-medium">{zoneName}{areaName ? ` > ${areaName}` : ""}</span>
               </div>
             )}
             {!user.household_registration_id && (
@@ -577,7 +613,7 @@ export default function AdminUserDetailPage() {
               <div className="bg-green-50 border border-green-200 rounded-xl p-3">
                 <p className="text-xs font-medium text-green-800">Household ID Assigned</p>
                 <p className="text-sm font-mono font-medium text-green-700 mt-1">{user.household_registration_id}</p>
-                <p className="text-xs text-green-600 mt-0.5">Zone: {zoneName}</p>
+                <p className="text-xs text-green-600 mt-0.5">Zone: {zoneName}{areaName ? ` > ${areaName}` : ""}</p>
               </div>
             )}
             <div className="flex items-center justify-between">
@@ -698,13 +734,41 @@ export default function AdminUserDetailPage() {
               </div>
               <div>
                 <label className="text-xs text-[var(--text-secondary)] mb-1 block">Zone</label>
-                <select value={editZoneId} onChange={(e) => { setEditZoneId(e.target.value); setEditNewZoneName(""); }} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 bg-white">
+                <select value={editZoneId} onChange={async (e) => {
+                  setEditZoneId(e.target.value);
+                  setEditNewZoneName("");
+                  setEditAreaId("");
+                  if (e.target.value) {
+                    try {
+                      const { createClient } = await import("@/lib/supabase/client");
+                      const supabase = createClient();
+                      const { data } = await supabase.from("areas").select("id, name, code").eq("zone_id", e.target.value).order("name");
+                      if (data) setEditAreas(data);
+                      else setEditAreas([]);
+                    } catch {
+                      setEditAreas([]);
+                    }
+                  } else {
+                    setEditAreas([]);
+                  }
+                }} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 bg-white">
                   <option value="">No zone</option>
                   {zones.map((z) => (
                     <option key={z.id} value={z.id}>{z.name}</option>
                   ))}
                 </select>
               </div>
+              {editAreas.length > 0 && (
+                <div>
+                  <label className="text-xs text-[var(--text-secondary)] mb-1 block">Area / Subdivision</label>
+                  <select value={editAreaId} onChange={(e) => setEditAreaId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 bg-white">
+                    <option value="">No subdivision</option>
+                    {editAreas.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-xs text-[var(--text-secondary)] mb-1 block">Or Create New Zone</label>
                 <input

@@ -1,5 +1,5 @@
 ﻿"use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { MapPin, ArrowLeft, Plus, X, Navigation } from "lucide-react";
@@ -19,11 +19,25 @@ interface Member {
   phone: string;
 }
 
+interface Zone {
+  id: string;
+  name: string;
+  prefix: string;
+}
+
+interface Area {
+  id: string;
+  name: string;
+  code: string;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
@@ -31,7 +45,37 @@ export default function RegisterPage() {
     locationDesc: "",
     houseType: "",
     zoneId: "",
+    areaId: "",
   });
+
+  useEffect(() => {
+    const fetchZones = async () => {
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.from("zones").select("id, name, prefix").order("name");
+        if (data) setZones(data);
+      } catch {}
+    };
+    fetchZones();
+  }, []);
+
+  useEffect(() => {
+    const fetchAreas = async () => {
+      if (!form.zoneId) {
+        setAreas([]);
+        return;
+      }
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.from("areas").select("id, name, code").eq("zone_id", form.zoneId).order("name");
+        if (data) setAreas(data);
+        else setAreas([]);
+      } catch {
+        setAreas([]);
+      }
+    };
+    fetchAreas();
+  }, [form.zoneId]);
 
   const points = useMemo(() => calculatePoints({
     fullName: form.fullName,
@@ -42,7 +86,15 @@ export default function RegisterPage() {
     hasFamilyMember: members.length > 0,
   }), [form, photos, members]);
 
-  const update = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
+  const update = (field: string, value: string) => {
+    setForm((f) => {
+      const updated = { ...f, [field]: value };
+      if (field === "zoneId") {
+        updated.areaId = "";
+      }
+      return updated;
+    });
+  };
 
   const addMember = () => {
     setMembers((m) => [...m, { name: "", phone: "" }]);
@@ -79,40 +131,13 @@ export default function RegisterPage() {
         if (referrer) referredBy = referrer.id;
       }
 
-      // Find or create zone by name
-      const zoneName = form.zoneId.trim();
-      let { data: zone } = await supabase
-        .from("zones")
-        .select("id")
-        .eq("name", zoneName)
-        .single();
-
-      if (!zone) {
-        // Auto-generate prefix from first letters of each word
-        const prefix = zoneName
-          .split(/\s+/)
-          .map((w) => w[0])
-          .join("")
-          .toUpperCase()
-          .slice(0, 3);
-        const { data: newZone } = await supabase
-          .from("zones")
-          .insert({ name: zoneName, prefix })
-          .select("id")
-          .single();
-        zone = newZone;
-      }
-
-      if (!zone) {
-        toast.error("Failed to create zone. Please try again.");
-        setLoading(false);
-        return;
-      }
+      const zoneId = form.zoneId;
+      const areaId = form.areaId || null;
 
       // Generate household registration ID via RPC
       const { data: regId, error: regIdError } = await supabase.rpc(
         "generate_household_registration_id",
-        { zone_uuid: zone.id }
+        { zone_uuid: zoneId, area_uuid: areaId }
       );
       if (regIdError) {
         toast.error("Failed to generate registration ID. Please try again.");
@@ -132,7 +157,8 @@ export default function RegisterPage() {
           points,
           referral_code: referralCode,
           referred_by: referredBy,
-          zone_id: zone.id,
+          zone_id: zoneId,
+          area_id: areaId,
           household_registration_id: regId,
         })
         .select("id")
@@ -200,6 +226,8 @@ export default function RegisterPage() {
     }
   };
 
+  const selectedZone = zones.find((z) => z.id === form.zoneId);
+
   return (
     <main className="min-h-screen bg-[var(--bg)]">
       <div className="max-w-lg mx-auto px-5 py-8">
@@ -244,13 +272,44 @@ export default function RegisterPage() {
             <label className="block text-sm font-medium text-[var(--text)]">
               Zone <span className="text-[var(--error)]">*</span>
             </label>
-            <Input
-              placeholder="e.g. Phungreitang – East, Wino – West..."
+            <select
               value={form.zoneId}
               onChange={(e) => update("zoneId", e.target.value)}
               required
-            />
+              className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition text-sm"
+            >
+              <option value="">Select zone...</option>
+              {zones.map((z) => (
+                <option key={z.id} value={z.id}>{z.name}</option>
+              ))}
+            </select>
           </div>
+
+          {/* Area/Subdivision Selection (optional) */}
+          {areas.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[var(--text)]">
+                Area / Subdivision <span className="text-[var(--text-secondary)] text-xs">(optional)</span>
+              </label>
+              <select
+                value={form.areaId}
+                onChange={(e) => update("areaId", e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition text-sm"
+              >
+                <option value="">No subdivision (whole zone)</option>
+                {areas.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
+                ))}
+              </select>
+              {selectedZone && (
+                <p className="text-[10px] text-[var(--text-secondary)]">
+                  Your Household ID will be: <span className="font-mono font-medium text-[var(--primary)]">
+                    {selectedZone.prefix}{form.areaId ? `-${areas.find((a) => a.id === form.areaId)?.code || "?"}` : ""}-001
+                  </span>
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-[var(--text)]">
