@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users, Trophy, Copy, ArrowLeft, Star, Send, CheckCircle, Clock, XCircle, Phone, LogIn, AlertCircle, Camera } from "lucide-react";
+import { Users, Trophy, Copy, ArrowLeft, Star, Send, CheckCircle, Clock, XCircle, Phone, LogIn, AlertCircle, Camera, MessageCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -252,6 +252,13 @@ export default function DashboardPage() {
     if (!user) return;
     navigator.clipboard.writeText(`${window.location.origin}/register?ref=${user.referral_code}`);
     toast.success("Referral link copied!");
+  };
+
+  const shareReferralWhatsApp = () => {
+    if (!user) return;
+    const url = `${window.location.origin}/register?ref=${user.referral_code}`;
+    const message = encodeURIComponent(`Hey! I use En-Route to register my household address in Ukhrul. It's quick and helps with accurate deliveries. Register yours here:\n\n${url}`);
+    window.open(`https://wa.me/?text=${message}`, "_blank");
   };
 
   const getInitials = (name: string) => name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -512,6 +519,12 @@ export default function DashboardPage() {
               </code>
               <Button size="sm" onClick={copyReferralLink}><Copy size={14} /></Button>
             </div>
+            <button
+              onClick={shareReferralWhatsApp}
+              className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg:#20BD5A text-white py-3 rounded-xl text-sm font-medium transition active:scale-[0.98]"
+            >
+              <MessageCircle size={16} /> Share on WhatsApp
+            </button>
           </CardContent>
         </Card>
 
