@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Users, FileText, Download, LogOut, Shield, Megaphone, Calendar, MapPin, LayoutDashboard, Menu, X, ChevronRight } from "lucide-react";
+import { Users, FileText, Download, LogOut, Shield, Megaphone, Calendar, MapPin, LayoutDashboard, Menu, X, Settings } from "lucide-react";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -12,6 +12,7 @@ const navItems = [
   { href: "/admin/ads", label: "Ads", icon: Megaphone },
   { href: "/admin/updates", label: "Updates", icon: Calendar },
   { href: "/admin/export", label: "Export", icon: Download },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

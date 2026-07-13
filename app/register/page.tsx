@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { MapPin, ArrowLeft, ArrowRight, Plus, X, Navigation, Check, Home, Camera, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, Plus, X, Navigation, Check, Home, Camera, Users, MapPin } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
@@ -18,15 +18,11 @@ interface Member {
   phone: string;
 }
 
-const steps = [
-  { id: 1, label: "Phone", icon: "📱" },
-  { id: 2, label: "Name", icon: "👤" },
-  { id: 3, label: "Location", icon: "📍" },
-  { id: 4, label: "House", icon: "🏠" },
-  { id: 5, label: "Maps", icon: "🗺️" },
-  { id: 6, label: "Photos", icon: "📷" },
-  { id: 7, label: "Members", icon: "👥" },
-];
+interface MappingProject {
+  id: string;
+  name: string;
+  zone_feature_enabled: boolean;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -35,15 +31,13 @@ export default function RegisterPage() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [villages, setVillages] = useState<{ id: string; name: string }[]>([]);
-  const [areas, setAreas] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [mappingProject, setMappingProject] = useState<MappingProject | null>(null);
   const [form, setForm] = useState({
     phone: "",
     fullName: "",
-    district: "Ukhrul",
     villageId: "",
     villageName: "",
-    areaId: "",
-    areaName: "",
+    zoneName: "",
     houseType: "",
     mapsLink: "",
     latitude: "",
@@ -51,28 +45,30 @@ export default function RegisterPage() {
     locationDesc: "",
   });
 
+  // Fetch active mapping project
   useEffect(() => {
-    const fetchVillages = async () => {
+    const fetchProject = async () => {
       try {
         const supabase = createClient();
-        const { data } = await supabase.from("villages").select("id, name").eq("district", "Ukhrul").eq("is_active", true).order("name");
+        const { data } = await supabase.from("mapping_projects").select("id, name, zone_feature_enabled").eq("is_active", true).single();
+        if (data) setMappingProject(data);
+      } catch {}
+    };
+    fetchProject();
+  }, []);
+
+  // Fetch villages for active mapping project
+  useEffect(() => {
+    const fetchVillages = async () => {
+      if (!mappingProject) return;
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.from("villages").select("id, name").eq("mapping_project_id", mappingProject.id).eq("is_active", true).order("name");
         if (data) setVillages(data);
       } catch {}
     };
     fetchVillages();
-  }, []);
-
-  useEffect(() => {
-    const fetchAreas = async () => {
-      if (!form.villageId) { setAreas([]); return; }
-      try {
-        const supabase = createClient();
-        const { data } = await supabase.from("areas").select("id, name, code").eq("village_id", form.villageId).order("name");
-        setAreas(data || []);
-      } catch { setAreas([]); }
-    };
-    fetchAreas();
-  }, [form.villageId]);
+  }, [mappingProject]);
 
   const update = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -85,7 +81,26 @@ export default function RegisterPage() {
     hasFamilyMember: members.length > 0,
   }), [form, photos, members]);
 
+  const steps = useMemo(() => {
+    const s = [
+      { id: 1, label: "Phone", icon: "📱" },
+      { id: 2, label: "Name", icon: "👤" },
+      { id: 3, label: "Location", icon: "📍" },
+      { id: 4, label: "House", icon: "🏠" },
+      { id: 5, label: "Maps", icon: "🗺️" },
+      { id: 6, label: "Photos", icon: "📷" },
+      { id: 7, label: "Members", icon: "👥" },
+    ];
+    return s;
+  }, []);
+
   const progress = Math.round((currentStep / steps.length) * 100);
+
+  const hasLocation = () => {
+    const hasMaps = form.mapsLink.trim().length > 0;
+    const hasCoords = form.latitude.trim().length > 0 && form.longitude.trim().length > 0;
+    return hasMaps || hasCoords;
+  };
 
   const canProceed = () => {
     switch (currentStep) {
@@ -93,7 +108,7 @@ export default function RegisterPage() {
       case 2: return form.fullName.trim().length > 0;
       case 3: return form.villageId || form.villageName.trim();
       case 4: return true;
-      case 5: return form.mapsLink.trim().length > 0;
+      case 5: return hasLocation();
       case 6: return true;
       case 7: return true;
       default: return true;
@@ -130,33 +145,21 @@ export default function RegisterPage() {
       // Find or create village
       let villageId = form.villageId;
       if (!villageId && form.villageName.trim()) {
-        let { data: village } = await supabase.from("villages").select("id").eq("name", form.villageName.trim()).eq("district", "Ukhrul").single();
+        let { data: village } = await supabase.from("villages").select("id").eq("name", form.villageName.trim()).eq("mapping_project_id", mappingProject?.id).single();
         if (!village) {
-          const { data: newVillage } = await supabase.from("villages").insert({ name: form.villageName.trim(), district: "Ukhrul" }).select("id").single();
+          const { data: newVillage } = await supabase.from("villages").insert({ name: form.villageName.trim(), mapping_project_id: mappingProject?.id }).select("id").single();
           village = newVillage;
         }
         if (village) villageId = village.id;
       }
 
-      // Find or create area
-      let areaId = form.areaId;
-      if (!areaId && form.areaName.trim() && villageId) {
-        let { data: area } = await supabase.from("areas").select("id").eq("village_id", villageId).ilike("name", form.areaName.trim()).single();
-        if (!area) {
-          const areaCode = form.areaName.trim().split(/\s+/).map((w: string) => w[0]).join("").toUpperCase().slice(0, 3);
-          const { data: newArea } = await supabase.from("areas").insert({ name: form.areaName.trim(), village_id: villageId, zone_id: null, code: areaCode }).select("id").single();
-          area = newArea;
-        }
-        if (area) areaId = area.id;
-      }
-
-      // Find or create zone for household ID
+      // Find or create zone for household ID (only if zone feature enabled)
       let zoneId = null;
-      if (villageId) {
-        let { data: zone } = await supabase.from("zones").select("id").eq("name", form.villageName.trim() || "Ukhrul").single();
+      if (mappingProject?.zone_feature_enabled && form.zoneName.trim()) {
+        let { data: zone } = await supabase.from("zones").select("id").eq("name", form.zoneName.trim()).single();
         if (!zone) {
-          const prefix = (form.villageName.trim() || "Ukhrul").split(/\s+/).map((w: string) => w[0]).join("").toUpperCase().slice(0, 3);
-          const { data: newZone } = await supabase.from("zones").insert({ name: form.villageName.trim() || "Ukhrul", prefix }).select("id").single();
+          const prefix = form.zoneName.trim().split(/\s+/).map((w: string) => w[0]).join("").toUpperCase().slice(0, 3);
+          const { data: newZone } = await supabase.from("zones").insert({ name: form.zoneName.trim(), prefix }).select("id").single();
           zone = newZone;
         }
         if (zone) zoneId = zone.id;
@@ -165,14 +168,14 @@ export default function RegisterPage() {
       // Generate household registration ID
       let regId = null;
       if (zoneId) {
-        const { data } = await supabase.rpc("generate_household_registration_id", { zone_uuid: zoneId, area_uuid: areaId });
+        const { data } = await supabase.rpc("generate_household_registration_id", { zone_uuid: zoneId, area_uuid: null });
         regId = data;
       }
 
       const { data: user, error: userError } = await supabase.from("users").insert({
         full_name: form.fullName,
         phone: form.phone,
-        maps_link: form.mapsLink,
+        maps_link: form.mapsLink || null,
         location_desc: form.locationDesc || null,
         house_type: form.houseType || null,
         photos,
@@ -180,8 +183,8 @@ export default function RegisterPage() {
         referral_code: referralCode,
         referred_by: referredBy,
         zone_id: zoneId,
-        area_id: areaId,
         village_id: villageId,
+        mapping_project_id: mappingProject?.id || null,
         household_registration_id: regId,
         latitude: form.latitude ? parseFloat(form.latitude) : null,
         longitude: form.longitude ? parseFloat(form.longitude) : null,
@@ -208,7 +211,7 @@ export default function RegisterPage() {
       const pointEntries = [];
       if (form.fullName) pointEntries.push({ user_id: user.id, amount: 5, reason: "registration: full_name" });
       if (form.phone) pointEntries.push({ user_id: user.id, amount: 5, reason: "registration: phone" });
-      if (form.mapsLink) pointEntries.push({ user_id: user.id, amount: 10, reason: "registration: maps_link" });
+      if (form.mapsLink || (form.latitude && form.longitude)) pointEntries.push({ user_id: user.id, amount: 10, reason: "registration: maps_link" });
       if (photos.length > 0) pointEntries.push({ user_id: user.id, amount: 4, reason: "registration: photos" });
       if (form.locationDesc) pointEntries.push({ user_id: user.id, amount: 3, reason: "registration: location_desc" });
       if (validMembers.length > 0) pointEntries.push({ user_id: user.id, amount: 3, reason: "registration: household_member" });
@@ -244,12 +247,7 @@ export default function RegisterPage() {
             <h2 className="text-xl font-bold mb-1">What&apos;s your phone number?</h2>
             <p className="text-sm text-[var(--text-secondary)]">We&apos;ll use this to identify your account</p>
           </div>
-          <Input
-            type="tel"
-            placeholder="+91XXXXXXXXXX"
-            value={form.phone}
-            onChange={(e) => update("phone", e.target.value)}
-          />
+          <Input type="tel" placeholder="+91XXXXXXXXXX" value={form.phone} onChange={(e) => update("phone", e.target.value)} />
         </div>
       );
       case 2: return (
@@ -261,11 +259,7 @@ export default function RegisterPage() {
             <h2 className="text-xl font-bold mb-1">Your full name</h2>
             <p className="text-sm text-[var(--text-secondary)]">As it appears on your ID</p>
           </div>
-          <Input
-            placeholder="e.g. Jihal Shimray"
-            value={form.fullName}
-            onChange={(e) => update("fullName", e.target.value)}
-          />
+          <Input placeholder="e.g. Jihal Shimray" value={form.fullName} onChange={(e) => update("fullName", e.target.value)} />
         </div>
       );
       case 3: return (
@@ -275,14 +269,16 @@ export default function RegisterPage() {
               <span className="text-3xl">📍</span>
             </div>
             <h2 className="text-xl font-bold mb-1">Where do you live?</h2>
-            <p className="text-sm text-[var(--text-secondary)]">Select your village and area</p>
+            <p className="text-sm text-[var(--text-secondary)]">Select your village{mappingProject?.zone_feature_enabled ? " and zone" : ""}</p>
           </div>
+          {/* Mapping Scope */}
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-[var(--text)]">District</label>
+            <label className="block text-sm font-medium text-[var(--text)]">Current Mapping</label>
             <div className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-gray-50 text-[var(--text-secondary)] text-sm flex items-center gap-2">
-              <Home size={16} /> Ukhrul <span className="text-xs text-[var(--text-secondary)]">(locked)</span>
+              <MapPin size={16} /> {mappingProject?.name || "Loading..."} <span className="text-xs text-[var(--text-secondary)]">(admin controlled)</span>
             </div>
           </div>
+          {/* Village */}
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-[var(--text)]">Village <span className="text-[var(--error)]">*</span></label>
             <select
@@ -295,13 +291,12 @@ export default function RegisterPage() {
             </select>
             <Input placeholder="Or type village name..." value={form.villageName} onChange={(e) => { update("villageName", e.target.value); update("villageId", ""); }} />
           </div>
-          {form.villageId && areas.length > 0 && (
+          {/* Zone / Locality (only if enabled by admin) */}
+          {mappingProject?.zone_feature_enabled && (
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-[var(--text)]">Area / Subdivision <span className="text-[var(--text-secondary)] text-xs">(optional)</span></label>
-              <select value={form.areaId} onChange={(e) => update("areaId", e.target.value)} className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] text-sm">
-                <option value="">No subdivision</option>
-                {areas.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
-              </select>
+              <label className="block text-sm font-medium text-[var(--text)]">Zone / Locality <span className="text-[var(--text-secondary)] text-xs">(optional)</span></label>
+              <Input placeholder="e.g. Phungreitang, Wino East" value={form.zoneName} onChange={(e) => update("zoneName", e.target.value)} />
+              <p className="text-[10px] text-[var(--text-secondary)]">Leave blank if your village doesn&apos;t need zones</p>
             </div>
           )}
         </div>
@@ -334,7 +329,7 @@ export default function RegisterPage() {
               <span className="text-3xl">🗺️</span>
             </div>
             <h2 className="text-xl font-bold mb-1">Pin your location</h2>
-            <p className="text-sm text-[var(--text-secondary)]">Help riders find you easily</p>
+            <p className="text-sm text-[var(--text-secondary)]">Provide a Google Maps link <strong>or</strong> coordinates</p>
           </div>
           <Input label="Google Maps Link" placeholder="https://maps.app.goo.gl/..." value={form.mapsLink} onChange={(e) => update("mapsLink", e.target.value)} />
           <div className="flex items-center gap-2">
@@ -343,10 +338,15 @@ export default function RegisterPage() {
             </button>
             <span className="text-xs text-[var(--text-secondary)]">— Drop pin, Share, copy link</span>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Latitude (optional)" placeholder="25.1234" value={form.latitude} onChange={(e) => update("latitude", e.target.value)} />
-            <Input label="Longitude (optional)" placeholder="94.5678" value={form.longitude} onChange={(e) => update("longitude", e.target.value)} />
+          <div className="relative my-2">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[var(--border)]" /></div>
+            <div className="relative flex justify-center"><span className="bg-[var(--bg)] px-3 text-xs text-[var(--text-secondary)]">OR</span></div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Latitude" placeholder="25.1234" value={form.latitude} onChange={(e) => update("latitude", e.target.value)} />
+            <Input label="Longitude" placeholder="94.5678" value={form.longitude} onChange={(e) => update("longitude", e.target.value)} />
+          </div>
+          <p className="text-[10px] text-[var(--text-secondary)]">Enter both latitude and longitude, or use Google Maps link above</p>
           <Textarea label="Location description (optional)" placeholder="Blue gate beside the church..." value={form.locationDesc} onChange={(e) => update("locationDesc", e.target.value)} rows={2} hint="Earns 3 points. Helps riders find you." />
         </div>
       );
