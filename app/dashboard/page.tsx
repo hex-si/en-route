@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users, Trophy, Copy, ArrowLeft, Star, Send, CheckCircle, Clock, XCircle, Phone, LogIn, AlertCircle, Camera, MessageCircle, Home, Check, Circle, ChevronRight, Share2 } from "lucide-react";
+import { Users, Trophy, Copy, ArrowLeft, Star, Send, CheckCircle, Clock, XCircle, Phone, LogIn, AlertCircle, Camera, MessageCircle, Home, Check, Circle, ChevronRight, Share2, ExternalLink } from "lucide-react";
 import toast from "react-hot-toast";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -650,44 +650,179 @@ export default function DashboardPage() {
         <Card id="update-request-section" className="mb-6">
           <CardHeader><h2 className="font-semibold text-sm">Request an Update</h2></CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmitUpdate} className="space-y-3">
+            <form onSubmit={handleSubmitUpdate} className="space-y-4">
               <select value={updateField} onChange={(e) => setUpdateField(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition text-sm">
-                <option value="">Select field to update...</option>
-                {updateFields.map((f) => (<option key={f.key} value={f.key}>{f.label}</option>))}
+                <option value="">Select what to update...</option>
+                <option value="full_name">👤 Full Name</option>
+                <option value="phone">📱 Phone Number</option>
+                <option value="maps_link">🗺️ Google Maps Link</option>
+                <option value="location_desc">📍 Location Description</option>
+                <option value="photos">📷 Upload New Photo</option>
+                <option value="delete_photos">🗑️ Delete Photos</option>
+                <option value="add_member">👥 Add Household Member</option>
+                <option value="remove_member">👥 Remove Household Member</option>
+                <option value="manual">📝 Custom Request</option>
               </select>
-              {updateField && (
-                <>
-                  {updateField === "photos" ? (
-                    <div className="space-y-3">
-                      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleRequestPhotoUpload} className="hidden" />
-                      <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-8 rounded-xl border-2 border-dashed border-[var(--border)] hover:border-[var(--primary)] text-[var(--text-secondary)] hover:text-[var(--primary)] transition">
-                        <Camera size={20} />
-                        <span className="text-sm">{requestPhoto ? "Change photo" : "Tap to upload photo"}</span>
-                      </button>
-                      {requestPhoto && (
-                        <div className="relative">
-                          <img src={requestPhoto} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
-                          <button type="button" onClick={() => { setRequestPhoto(null); setUpdateValue(""); }} className="absolute top-2 right-2 p-1 bg-black/50 rounded-full text-white text-xs">✕</button>
-                        </div>
-                      )}
-                      <p className="text-xs text-[var(--text-secondary)]">Max 1MB. Admin will review and upload.</p>
+
+              {/* Dedicated UI per request type */}
+              {updateField === "phone" && (
+                <div className="space-y-3 bg-gray-50 rounded-xl p-4">
+                  <div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">Current Number</p>
+                    <p className="text-sm font-mono font-medium">{maskPhone(user.phone)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">New Number</p>
+                    <Input type="tel" placeholder="Enter new phone number" value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} />
+                  </div>
+                </div>
+              )}
+
+              {updateField === "full_name" && (
+                <div className="space-y-3 bg-gray-50 rounded-xl p-4">
+                  <div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">Current Name</p>
+                    <p className="text-sm font-medium">{maskName(user.full_name)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">New Name</p>
+                    <Input placeholder="Enter new full name" value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} />
+                  </div>
+                </div>
+              )}
+
+              {updateField === "maps_link" && (
+                <div className="space-y-3 bg-gray-50 rounded-xl p-4">
+                  <div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">Current Location</p>
+                    {user.maps_link ? (
+                      <a href={user.maps_link} target="_blank" rel="noopener noreferrer" className="text-sm text-[var(--primary)] hover:underline flex items-center gap-1">
+                        Open in Maps <ExternalLink size={12} />
+                      </a>
+                    ) : <p className="text-sm text-[var(--text-secondary)]">Not set</p>}
+                  </div>
+                  <div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">New Google Maps Link</p>
+                    <Input placeholder="https://maps.app.goo.gl/..." value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} />
+                  </div>
+                </div>
+              )}
+
+              {updateField === "location_desc" && (
+                <div className="space-y-3 bg-gray-50 rounded-xl p-4">
+                  <div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">Current Description</p>
+                    <p className="text-sm">{user.location_desc || <span className="text-[var(--text-secondary)]">Not set</span>}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">New Description</p>
+                    <Textarea placeholder="Blue gate beside the church..." value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} rows={2} />
+                  </div>
+                </div>
+              )}
+
+              {updateField === "photos" && (
+                <div className="space-y-3">
+                  {editPhotos.length > 0 && (
+                    <div>
+                      <p className="text-xs text-[var(--text-secondary)] mb-2">Current Photos ({editPhotos.length}/4)</p>
+                      <div className="flex gap-2">
+                        {editPhotos.map((photo, i) => (
+                          <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-[var(--border)]">
+                            <img src={photo} alt="" className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ) : updateField === "delete_photos" ? (
-                    <div className="space-y-2">
-                      <p className="text-sm text-[var(--text-secondary)]">Current photos: {editPhotos.length}</p>
-                      <Textarea placeholder="Reason for deleting photos..." value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} rows={2} />
-                    </div>
-                  ) : updateField === "manual" ? (
-                    <Textarea placeholder="Write your request here..." value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} rows={4} />
-                  ) : (
-                    <Textarea placeholder="Enter the new value..." value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} rows={2} />
                   )}
-                  <Button type="submit" size="sm" loading={submittingUpdate} disabled={!updateValue.trim()}>
-                    <Send size={14} className="mr-1" /> Submit Request
-                  </Button>
-                </>
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleRequestPhotoUpload} className="hidden" />
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-6 rounded-xl border-2 border-dashed border-[var(--border)] hover:border-[var(--primary)] text-[var(--text-secondary)] hover:text-[var(--primary)] transition">
+                    <Camera size={20} />
+                    <span className="text-sm">{requestPhoto ? "Change photo" : "Tap to upload new photo"}</span>
+                  </button>
+                  {requestPhoto && (
+                    <div className="relative">
+                      <img src={requestPhoto} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
+                      <button type="button" onClick={() => { setRequestPhoto(null); setUpdateValue(""); }} className="absolute top-2 right-2 p-1 bg-black/50 rounded-full text-white text-xs">✕</button>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-[var(--text-secondary)]">Max 1MB. Admin will review and upload.</p>
+                </div>
+              )}
+
+              {updateField === "delete_photos" && (
+                <div className="space-y-3">
+                  {editPhotos.length > 0 ? (
+                    <div>
+                      <p className="text-xs text-[var(--text-secondary)] mb-2">Select photos to delete</p>
+                      <div className="grid grid-cols-4 gap-2">
+                        {editPhotos.map((photo, i) => (
+                          <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-[var(--border)]">
+                            <img src={photo} alt="" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                              <span className="text-white text-xs">Keep</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[var(--text-secondary)]">No photos to delete</p>
+                  )}
+                  <Textarea placeholder="Reason for deleting photos..." value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} rows={2} />
+                </div>
+              )}
+
+              {updateField === "add_member" && (
+                <div className="space-y-3 bg-gray-50 rounded-xl p-4">
+                  <p className="text-xs text-[var(--text-secondary)]">Add a new household member</p>
+                  <Input placeholder="Member's full name" value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} />
+                  <Input type="tel" placeholder="Member's phone number" value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} />
+                  <p className="text-[10px] text-[var(--text-secondary)]">Enter the name and phone in the message below. Admin will add them.</p>
+                  <Textarea placeholder="Add member: Name - Phone" value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} rows={2} />
+                </div>
+              )}
+
+              {updateField === "remove_member" && (
+                <div className="space-y-3">
+                  {members.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-[var(--text-secondary)]">Current members — tap to request removal</p>
+                      {members.map((member) => (
+                        <div key={member.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5">
+                          <div>
+                            <p className="text-sm font-medium">{maskName(member.name)}</p>
+                            <p className="text-xs text-[var(--text-secondary)]">{maskPhone(member.phone)}</p>
+                          </div>
+                          <button type="button" onClick={() => setUpdateValue(`Remove: ${member.name} (${member.phone})`)} className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition">
+                            Select
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[var(--text-secondary)]">No members to remove</p>
+                  )}
+                  {updateValue && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                      <p className="text-xs text-red-700 font-medium">Removal request:</p>
+                      <p className="text-sm text-red-600">{updateValue}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {updateField === "manual" && (
+                <Textarea placeholder="Write your request here..." value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} rows={4} />
+              )}
+
+              {updateField && (
+                <Button type="submit" size="sm" loading={submittingUpdate} disabled={!updateValue.trim()}>
+                  <Send size={14} className="mr-1" /> Submit Request
+                </Button>
               )}
             </form>
+
             {requests.length > 0 && (
               <div className="mt-4 pt-4 border-t border-[var(--border)]">
                 <p className="text-xs text-[var(--text-secondary)] mb-2">Recent Requests</p>

@@ -16,6 +16,10 @@ interface Stats {
   verifiedUsers: number;
   pendingUsers: number;
   needsInfoUsers: number;
+  todayRegistrations: number;
+  weeklyGrowth: { day: string; count: number }[];
+  mappingProject: string | null;
+  zoneDistribution: { name: string; count: number }[];
 }
 
 interface RecentActivity {
@@ -73,7 +77,65 @@ export default function AdminDashboardPage() {
         verifiedUsers: verifiedRes.count || 0,
         pendingUsers: pendingUsersRes.count || 0,
         needsInfoUsers: needsInfoRes.count || 0,
+        todayRegistrations: 0,
+        weeklyGrowth: [],
+        mappingProject: null,
+        zoneDistribution: [],
       });
+
+      // Today's registrations
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { count: todayCount } = await supabase
+        .from("users")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", today.toISOString());
+
+      // Weekly growth (last 7 days)
+      const weeklyData: { day: string; count: number }[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dayStart = new Date(d); dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(d); dayEnd.setHours(23, 59, 59, 999);
+        const { count } = await supabase
+          .from("users")
+          .select("*", { count: "exact", head: true })
+          .gte("created_at", dayStart.toISOString())
+          .lte("created_at", dayEnd.toISOString());
+        weeklyData.push({ day: d.toLocaleDateString("en-US", { weekday: "short" }), count: count || 0 });
+      }
+
+      // Active mapping project
+      const { data: mp } = await supabase
+        .from("mapping_projects")
+        .select("name")
+        .eq("is_active", true)
+        .single();
+
+      // Zone distribution (top 5 zones by user count)
+      const { data: zoneUsers } = await supabase
+        .from("users")
+        .select("zone_id")
+        .not("zone_id", "is", null);
+      const zoneCounts: Record<string, number> = {};
+      zoneUsers?.forEach((u) => { if (u.zone_id) zoneCounts[u.zone_id] = (zoneCounts[u.zone_id] || 0) + 1; });
+      const topZoneIds = Object.entries(zoneCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => id);
+      let zoneDist: { name: string; count: number }[] = [];
+      if (topZoneIds.length > 0) {
+        const { data: zoneNames } = await supabase.from("zones").select("id, name").in("id", topZoneIds);
+        const nameMap: Record<string, string> = {};
+        zoneNames?.forEach((z) => { nameMap[z.id] = z.name; });
+        zoneDist = topZoneIds.map((id) => ({ name: nameMap[id] || "Unknown", count: zoneCounts[id] }));
+      }
+
+      setStats((prev) => prev ? {
+        ...prev,
+        todayRegistrations: todayCount || 0,
+        weeklyGrowth: weeklyData,
+        mappingProject: mp?.name || null,
+        zoneDistribution: zoneDist,
+      } : null);
 
       // Fetch recent registrations
       const { data: recentUsers } = await supabase
@@ -215,24 +277,24 @@ export default function AdminDashboardPage() {
         <Card>
           <CardContent className="py-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-[var(--text-secondary)]">Zones</span>
+              <span className="text-xs text-[var(--text-secondary)]">Today&apos;s Registrations</span>
+              <span className="font-bold text-sm text-[var(--primary)]">{stats.todayRegistrations}</span>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[var(--text-secondary)]">Active Mapping</span>
+              <span className="font-bold text-sm">{stats.mappingProject || "None"}</span>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[var(--text-secondary)]">Zones Used</span>
               <span className="font-bold text-sm">{stats.totalZones}</span>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-[var(--text-secondary)]">Areas</span>
-              <span className="font-bold text-sm">{stats.totalAreas}</span>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-[var(--text-secondary)]">Villages</span>
-              <span className="font-bold text-sm">{stats.totalVillages}</span>
             </div>
           </CardContent>
         </Card>
@@ -245,6 +307,59 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Weekly Growth Chart */}
+      {stats.weeklyGrowth.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <h2 className="font-semibold text-sm flex items-center gap-2">
+              <TrendingUp size={16} className="text-[var(--primary)]" /> Weekly Growth
+            </h2>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-end gap-2 h-32">
+              {stats.weeklyGrowth.map((day, i) => {
+                const maxCount = Math.max(...stats.weeklyGrowth.map((d) => d.count), 1);
+                const height = (day.count / maxCount) * 100;
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <span className="text-[10px] font-medium text-[var(--text-secondary)]">{day.count}</span>
+                    <div className="w-full bg-gray-100 rounded-t-lg relative" style={{ height: "80px" }}>
+                      <div className="absolute bottom-0 w-full bg-[var(--primary)]/80 rounded-t-lg transition-all" style={{ height: `${height}%` }} />
+                    </div>
+                    <span className="text-[10px] text-[var(--text-secondary)]">{day.day}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Zone Distribution */}
+      {stats.zoneDistribution.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <h2 className="font-semibold text-sm flex items-center gap-2">
+              <MapPin size={16} className="text-[var(--primary)]" /> Zone Distribution
+            </h2>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {stats.zoneDistribution.map((zone, i) => {
+              const maxCount = Math.max(...stats.zoneDistribution.map((z) => z.count), 1);
+              return (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="text-sm w-24 truncate">{zone.name}</span>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-[var(--primary)]/60 rounded-full" style={{ width: `${(zone.count / maxCount) * 100}%` }} />
+                  </div>
+                  <span className="text-sm font-medium w-8 text-right">{zone.count}</span>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Request Breakdown */}

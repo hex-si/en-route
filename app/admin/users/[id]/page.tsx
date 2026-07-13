@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, MessageCircle, CheckCircle, Clock, AlertCircle, RefreshCw, Eye, EyeOff, Pencil, Trash2, Send, X, Save, Users, MapPin, Camera, FileText, UserCheck } from "lucide-react";
+import { ArrowLeft, ExternalLink, MessageCircle, CheckCircle, Clock, AlertCircle, RefreshCw, Eye, EyeOff, Pencil, Trash2, Send, X, Save, Users, MapPin, Camera, FileText, UserCheck, Activity, StickyNote } from "lucide-react";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
@@ -70,6 +70,8 @@ const tabs = [
   { id: "members", label: "Members", icon: Users },
   { id: "requests", label: "Requests", icon: FileText },
   { id: "referrals", label: "Referrals", icon: ExternalLink },
+  { id: "activity", label: "Activity", icon: Activity },
+  { id: "notes", label: "Notes", icon: StickyNote },
 ];
 
 export default function AdminUserDetailPage() {
@@ -108,6 +110,10 @@ export default function AdminUserDetailPage() {
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [activityLog, setActivityLog] = useState<{ id: string; action: string; details: string; created_at: string }[]>([]);
+  const [internalNotes, setInternalNotes] = useState<{ id: string; note: string; created_at: string }[]>([]);
+  const [newNote, setNewNote] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/users/${id}`);
@@ -148,6 +154,24 @@ export default function AdminUserDetailPage() {
           created_at: r.created_at,
         })));
       } else { setReferrals([]); }
+
+      // Build activity log from existing data
+      const activities: { id: string; action: string; details: string; created_at: string }[] = [];
+      activities.push({ id: "reg", action: "Registered", details: "Account created", created_at: user?.created_at || "" });
+      (reqData || []).forEach((r) => {
+        activities.push({
+          id: r.id,
+          action: `Request: ${r.field.replace(/_/g, " ")}`,
+          details: `${r.status}${r.resolved_at ? ` on ${new Date(r.resolved_at).toLocaleDateString()}` : ""}`,
+          created_at: r.created_at,
+        });
+      });
+      activities.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setActivityLog(activities);
+
+      // Internal notes (stored in localStorage per user)
+      const storedNotes = localStorage.getItem(`en-route-notes-${id}`);
+      if (storedNotes) setInternalNotes(JSON.parse(storedNotes));
     } catch { setReferrals([]); }
     setLoading(false);
   }, [id]);
@@ -496,6 +520,84 @@ export default function AdminUserDetailPage() {
                 ))}
               </div>
             ) : (<p className="text-sm text-[var(--text-secondary)]">No referrals yet</p>)}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "activity" && (
+        <Card>
+          <CardHeader><h2 className="font-semibold text-sm flex items-center gap-2"><Activity size={14} /> Activity Log</h2></CardHeader>
+          <CardContent>
+            {activityLog.length > 0 ? (
+              <div className="space-y-3">
+                {activityLog.map((act) => (
+                  <div key={act.id} className="flex items-start gap-3">
+                    <div className="w-2 h-2 rounded-full bg-[var(--primary)] mt-2 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{act.action}</p>
+                      <p className="text-xs text-[var(--text-secondary)]">{act.details}</p>
+                      <p className="text-[10px] text-[var(--text-secondary)]">{new Date(act.created_at).toLocaleString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-secondary)] text-center py-4">No activity recorded</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "notes" && (
+        <Card>
+          <CardHeader><h2 className="font-semibold text-sm flex items-center gap-2"><StickyNote size={14} /> Internal Notes</h2></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Add a note..."
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newNote.trim()) {
+                    const note = { id: Date.now().toString(), note: newNote.trim(), created_at: new Date().toISOString() };
+                    const updated = [...internalNotes, note];
+                    setInternalNotes(updated);
+                    localStorage.setItem(`en-route-notes-${id}`, JSON.stringify(updated));
+                    setNewNote("");
+                  }
+                }}
+                className="flex-1 px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
+              />
+              <Button size="sm" onClick={() => {
+                if (newNote.trim()) {
+                  const note = { id: Date.now().toString(), note: newNote.trim(), created_at: new Date().toISOString() };
+                  const updated = [...internalNotes, note];
+                  setInternalNotes(updated);
+                  localStorage.setItem(`en-route-notes-${id}`, JSON.stringify(updated));
+                  setNewNote("");
+                }
+              }} disabled={!newNote.trim()}>Add</Button>
+            </div>
+            {internalNotes.length > 0 ? (
+              <div className="space-y-2">
+                {internalNotes.map((n) => (
+                  <div key={n.id} className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                    <p className="text-sm">{n.note}</p>
+                    <div className="flex items-center justify-between mt-2">
+                      <p className="text-[10px] text-[var(--text-secondary)]">{new Date(n.created_at).toLocaleString()}</p>
+                      <button onClick={() => {
+                        const updated = internalNotes.filter((note) => note.id !== n.id);
+                        setInternalNotes(updated);
+                        localStorage.setItem(`en-route-notes-${id}`, JSON.stringify(updated));
+                      }} className="text-[10px] text-red-500 hover:text-red-700">Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-secondary)] text-center py-4">No internal notes yet</p>
+            )}
           </CardContent>
         </Card>
       )}
