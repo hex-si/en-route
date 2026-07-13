@@ -20,9 +20,9 @@ export default function AdminExportPage() {
     setLoading("csv");
     try {
       const users = await fetchUsers();
-      const headers = ["Registration ID", "Name", "Phone", "Zone", "Maps Link", "Location Description", "Photos", "Points", "Referral Code", "Verification Status", "House Type", "Registered At"];
+      const headers = ["Registration ID", "Name", "Phone", "Location", "Maps Link", "Location Description", "Photos", "Points", "Referral Code", "Verification Status", "House Type", "Registered At"];
       const rows = users.map((u: any) => [
-        u.household_registration_id || "", u.full_name, u.phone, u.zone_id || "",
+        u.household_registration_id || "", u.full_name, u.phone, u.location || "",
         u.maps_link, u.location_desc || "",
         (u.photos || []).join("; "), u.points,
         u.referral_code, u.verification_status, u.house_type || "", new Date(u.created_at).toISOString(),
@@ -43,21 +43,56 @@ export default function AdminExportPage() {
     }
   };
 
+  const exportExcel = async () => {
+    setLoading("excel");
+    try {
+      const users = await fetchUsers();
+      const headers = ["Registration ID", "Name", "Phone", "Location", "Maps Link", "Location Description", "Points", "Verification Status", "House Type", "Registered At"];
+      const rows = users.map((u: any) => [
+        u.household_registration_id || "", u.full_name, u.phone, u.location || "",
+        u.maps_link || "", u.location_desc || "",
+        u.points, u.verification_status, u.house_type || "", new Date(u.created_at).toLocaleDateString(),
+      ]);
+      const html = `
+<!DOCTYPE html>
+<html><head><title>En-Route Users</title>
+<style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f5f5f5;font-weight:bold}tr:nth-child(even){background:#fafafa}</style>
+</head><body>
+<h1>En-Route Users Export</h1>
+<p>Generated: ${new Date().toLocaleString()}</p>
+<p>Total: ${users.length} households</p>
+<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>
+${rows.map((r: any[]) => `<tr>${r.map((c) => `<td>${String(c).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`).join("")}</tr>`).join("")}
+</tbody></table></body></html>`;
+      const blob = new Blob([html], { type: "application/vnd.ms-excel" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `en-route-users-${new Date().toISOString().split("T")[0]}.xls`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Excel file downloaded");
+    } catch {
+      toast.error("Export failed");
+    } finally {
+      setLoading(null);
+    }
+  };
+
   const exportPDF = async () => {
     setLoading("pdf");
     try {
       const users = await fetchUsers();
-      // Simple HTML table exported as printable HTML
       const html = `
 <!DOCTYPE html>
 <html><head><title>En-Route Users</title>
-<style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f5f5f5}tr:nth-child(even){background:#fafafa}</style>
+<style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f5f5f5}tr:nth-child(even){background:#fafafa}@media print{body{padding:10px}}</style>
 </head><body>
 <h1>En-Route Users Report</h1>
 <p>Generated: ${new Date().toLocaleString()}</p>
 <p>Total: ${users.length} households</p>
-<table><thead><tr><th>Reg ID</th><th>Name</th><th>Phone</th><th>Maps Link</th><th>Description</th><th>Points</th><th>Status</th><th>House Type</th><th>Date</th></tr></thead><tbody>
-${users.map((u: any) => `<tr><td>${u.household_registration_id || ""}</td><td>${u.full_name}</td><td>${u.phone}</td><td><a href="${u.maps_link}">Maps</a></td><td>${u.location_desc || ""}</td><td>${u.points}</td><td>${u.verification_status}</td><td>${u.house_type || ""}</td><td>${new Date(u.created_at).toLocaleDateString()}</td></tr>`).join("")}
+<table><thead><tr><th>Reg ID</th><th>Name</th><th>Phone</th><th>Location</th><th>Maps Link</th><th>Description</th><th>Points</th><th>Status</th><th>House Type</th><th>Date</th></tr></thead><tbody>
+${users.map((u: any) => `<tr><td>${u.household_registration_id || ""}</td><td>${u.full_name}</td><td>${u.phone}</td><td>${u.location || ""}</td><td><a href="${u.maps_link}">Maps</a></td><td>${u.location_desc || ""}</td><td>${u.points}</td><td>${u.verification_status}</td><td>${u.house_type || ""}</td><td>${new Date(u.created_at).toLocaleDateString()}</td></tr>`).join("")}
 </tbody></table></body></html>`;
       const blob = new Blob([html], { type: "text/html" });
       const url = URL.createObjectURL(blob);
@@ -77,27 +112,37 @@ ${users.map((u: any) => `<tr><td>${u.household_registration_id || ""}</td><td>${
   return (
     <div>
       <h1 className="text-xl font-bold mb-6">Export Data</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card className="hover:shadow-md transition">
-          <CardContent className="text-center py-8">
-            <Table size={32} className="mx-auto text-[var(--primary)] mb-3" />
-            <h2 className="font-semibold mb-1">CSV Export</h2>
-            <p className="text-xs text-[var(--text-secondary)] mb-4">Spreadsheet format. All user data.</p>
-            <Button onClick={exportCSV} loading={loading === "csv"}>
-              <Download size={16} className="mr-2" /> Download CSV
-            </Button>
-          </CardContent>
-        </Card>
-        <Card className="hover:shadow-md transition">
-          <CardContent className="text-center py-8">
-            <FileText size={32} className="mx-auto text-[var(--primary)] mb-3" />
-            <h2 className="font-semibold mb-1">PDF Report</h2>
-            <p className="text-xs text-[var(--text-secondary)] mb-4">Printable HTML report. Open in browser, print to PDF.</p>
-            <Button onClick={exportPDF} loading={loading === "pdf"}>
-              <Download size={16} className="mr-2" /> Download Report
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="hover:shadow-md transition cursor-pointer" onClick={exportCSV}>
+          <Card>
+            <CardContent className="py-6 text-center">
+              <Table size={32} className="mx-auto mb-3 text-green-600" />
+              <p className="font-medium">Export CSV</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">Spreadsheet format</p>
+              {loading === "csv" && <p className="text-xs text-[var(--primary)] mt-2">Generating...</p>}
+            </CardContent>
+          </Card>
+        </div>
+        <div className="hover:shadow-md transition cursor-pointer" onClick={exportExcel}>
+          <Card>
+            <CardContent className="py-6 text-center">
+              <Table size={32} className="mx-auto mb-3 text-blue-600" />
+              <p className="font-medium">Export Excel</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">Microsoft Excel format</p>
+              {loading === "excel" && <p className="text-xs text-[var(--primary)] mt-2">Generating...</p>}
+            </CardContent>
+          </Card>
+        </div>
+        <div className="hover:shadow-md transition cursor-pointer" onClick={exportPDF}>
+          <Card>
+            <CardContent className="py-6 text-center">
+              <FileText size={32} className="mx-auto mb-3 text-orange-600" />
+              <p className="font-medium">Export PDF</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">Printable report</p>
+              {loading === "pdf" && <p className="text-xs text-[var(--primary)] mt-2">Generating...</p>}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

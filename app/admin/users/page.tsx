@@ -7,9 +7,14 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 
 const statusColors: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-700",
   pending_verification: "bg-yellow-100 text-yellow-700",
-  verified: "bg-green-100 text-green-700",
+  under_review: "bg-blue-100 text-blue-700",
   needs_clarification: "bg-orange-100 text-orange-700",
+  verified: "bg-green-100 text-green-700",
+  approved: "bg-green-100 text-green-700",
+  completed: "bg-green-100 text-green-700",
+  rejected: "bg-red-100 text-red-700",
 };
 
 interface User {
@@ -21,6 +26,8 @@ interface User {
   created_at: string;
   household_registration_id: string | null;
   zone_id: string | null;
+  location: string | null;
+  mapping_project_id: string | null;
 }
 
 export default function AdminUsersPage() {
@@ -83,7 +90,7 @@ export default function AdminUsersPage() {
       </div>
 
       <div className="flex gap-2 mb-4 flex-wrap">
-        {["", "pending_verification", "verified", "needs_clarification"].map((s) => (
+        {["", "pending", "under_review", "needs_clarification", "approved", "rejected"].map((s) => (
           <button
             key={s}
             onClick={() => { setStatusFilter(s); setPage(1); }}
@@ -107,6 +114,7 @@ export default function AdminUsersPage() {
                   <div>
                     <p className="font-medium text-sm">{user.full_name}</p>
                     <p className="text-xs text-[var(--text-secondary)]">{user.phone}</p>
+                    {user.location && <p className="text-xs text-[var(--text-secondary)]">{user.location}</p>}
                     {user.household_registration_id && (
                       <p className="text-xs font-mono text-[var(--primary)]">{user.household_registration_id}</p>
                     )}

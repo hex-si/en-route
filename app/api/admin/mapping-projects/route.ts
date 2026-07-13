@@ -17,12 +17,16 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { name, zone_feature_enabled } = body;
+  const { name, zone_feature_enabled, mode } = body;
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
   const { data, error } = await supabase
     .from("mapping_projects")
-    .insert({ name: name.trim(), zone_feature_enabled: zone_feature_enabled ?? true })
+    .insert({
+      name: name.trim(),
+      zone_feature_enabled: zone_feature_enabled ?? false,
+      mode: mode || "single",
+    })
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

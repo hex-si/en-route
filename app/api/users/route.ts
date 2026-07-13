@@ -12,7 +12,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("users")
-    .select("id, full_name, phone, points, verification_status, created_at, house_type, household_registration_id, zone_id", { count: "exact" });
+    .select("id, full_name, phone, points, verification_status, created_at, house_type, household_registration_id, zone_id, location, mapping_project_id", { count: "exact" });
 
   if (search) {
     query = query.or(

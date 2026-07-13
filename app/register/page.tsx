@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { ArrowLeft, ArrowRight, Plus, X, Navigation, Check, Home, Camera, Users, MapPin } from "lucide-react";
+import { ArrowLeft, ArrowRight, Plus, X, Navigation, Check, Home, Camera, Users, MapPin, FileCheck } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
@@ -12,6 +12,7 @@ import { calculatePoints } from "@/lib/points";
 import { generateReferralCode } from "@/lib/referrals";
 import { phonesMatch } from "@/lib/phone";
 import { createClient } from "@/lib/supabase/client";
+import { maskName } from "@/lib/privacy";
 
 interface Member {
   name: string;
@@ -21,7 +22,7 @@ interface Member {
 interface MappingProject {
   id: string;
   name: string;
-  zone_feature_enabled: boolean;
+  mode: string;
 }
 
 export default function RegisterPage() {
@@ -30,14 +31,12 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
-  const [villages, setVillages] = useState<{ id: string; name: string }[]>([]);
-  const [mappingProject, setMappingProject] = useState<MappingProject | null>(null);
+  const [activeProjects, setActiveProjects] = useState<MappingProject[]>([]);
+  const [selectedProject, setSelectedProject] = useState<MappingProject | null>(null);
   const [form, setForm] = useState({
     phone: "",
     fullName: "",
-    villageId: "",
-    villageName: "",
-    zoneName: "",
+    location: "",
     houseType: "",
     mapsLink: "",
     latitude: "",
@@ -45,30 +44,21 @@ export default function RegisterPage() {
     locationDesc: "",
   });
 
-  // Fetch active mapping project
   useEffect(() => {
-    const fetchProject = async () => {
+    const fetchProjects = async () => {
       try {
         const supabase = createClient();
-        const { data } = await supabase.from("mapping_projects").select("id, name, zone_feature_enabled").eq("is_active", true).single();
-        if (data) setMappingProject(data);
+        const { data } = await supabase.from("mapping_projects").select("id, name, mode").eq("is_active", true).order("name");
+        if (data && data.length > 0) {
+          setActiveProjects(data);
+          if (data.length === 1) {
+            setSelectedProject(data[0]);
+          }
+        }
       } catch {}
     };
-    fetchProject();
+    fetchProjects();
   }, []);
-
-  // Fetch villages for active mapping project
-  useEffect(() => {
-    const fetchVillages = async () => {
-      if (!mappingProject) return;
-      try {
-        const supabase = createClient();
-        const { data } = await supabase.from("villages").select("id, name").eq("mapping_project_id", mappingProject.id).eq("is_active", true).order("name");
-        if (data) setVillages(data);
-      } catch {}
-    };
-    fetchVillages();
-  }, [mappingProject]);
 
   const update = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -76,23 +66,24 @@ export default function RegisterPage() {
     fullName: form.fullName,
     phone: form.phone,
     mapsLink: form.mapsLink,
+    latitude: form.latitude,
+    longitude: form.longitude,
     photos,
     locationDesc: form.locationDesc,
     hasFamilyMember: members.length > 0,
   }), [form, photos, members]);
 
-  const steps = useMemo(() => {
-    const s = [
-      { id: 1, label: "Phone", icon: "📱" },
-      { id: 2, label: "Name", icon: "👤" },
-      { id: 3, label: "Location", icon: "📍" },
-      { id: 4, label: "House", icon: "🏠" },
-      { id: 5, label: "Maps", icon: "🗺️" },
-      { id: 6, label: "Photos", icon: "📷" },
-      { id: 7, label: "Members", icon: "👥" },
-    ];
-    return s;
-  }, []);
+  const steps = useMemo(() => [
+    { id: 1, label: "Phone", icon: "📱" },
+    { id: 2, label: "Name", icon: "👤" },
+    { id: 3, label: "Mapping", icon: "🗺️" },
+    { id: 4, label: "Location", icon: "📍" },
+    { id: 5, label: "House", icon: "🏠" },
+    { id: 6, label: "Pin", icon: "📌" },
+    { id: 7, label: "Photos", icon: "📷" },
+    { id: 8, label: "Members", icon: "👥" },
+    { id: 9, label: "Review", icon: "✅" },
+  ], []);
 
   const progress = Math.round((currentStep / steps.length) * 100);
 
@@ -106,11 +97,13 @@ export default function RegisterPage() {
     switch (currentStep) {
       case 1: return form.phone.trim().length >= 10;
       case 2: return form.fullName.trim().length > 0;
-      case 3: return form.villageId || form.villageName.trim();
-      case 4: return true;
-      case 5: return hasLocation();
-      case 6: return true;
+      case 3: return selectedProject !== null;
+      case 4: return form.location.trim().length > 0;
+      case 5: return true;
+      case 6: return hasLocation();
       case 7: return true;
+      case 8: return true;
+      case 9: return true;
       default: return true;
     }
   };
@@ -142,50 +135,18 @@ export default function RegisterPage() {
         if (referrer) referredBy = referrer.id;
       }
 
-      // Find or create village
-      let villageId = form.villageId;
-      if (!villageId && form.villageName.trim()) {
-        let { data: village } = await supabase.from("villages").select("id").eq("name", form.villageName.trim()).eq("mapping_project_id", mappingProject?.id).single();
-        if (!village) {
-          const { data: newVillage } = await supabase.from("villages").insert({ name: form.villageName.trim(), mapping_project_id: mappingProject?.id }).select("id").single();
-          village = newVillage;
-        }
-        if (village) villageId = village.id;
-      }
-
-      // Find or create zone for household ID (only if zone feature enabled)
-      let zoneId = null;
-      if (mappingProject?.zone_feature_enabled && form.zoneName.trim()) {
-        let { data: zone } = await supabase.from("zones").select("id").eq("name", form.zoneName.trim()).single();
-        if (!zone) {
-          const prefix = form.zoneName.trim().split(/\s+/).map((w: string) => w[0]).join("").toUpperCase().slice(0, 3);
-          const { data: newZone } = await supabase.from("zones").insert({ name: form.zoneName.trim(), prefix }).select("id").single();
-          zone = newZone;
-        }
-        if (zone) zoneId = zone.id;
-      }
-
-      // Generate household registration ID
-      let regId = null;
-      if (zoneId) {
-        const { data } = await supabase.rpc("generate_household_registration_id", { zone_uuid: zoneId, area_uuid: null });
-        regId = data;
-      }
-
       const { data: user, error: userError } = await supabase.from("users").insert({
         full_name: form.fullName,
         phone: form.phone,
         maps_link: form.mapsLink || null,
+        location: form.location.trim(),
         location_desc: form.locationDesc || null,
         house_type: form.houseType || null,
         photos,
         points,
         referral_code: referralCode,
         referred_by: referredBy,
-        zone_id: zoneId,
-        village_id: villageId,
-        mapping_project_id: mappingProject?.id || null,
-        household_registration_id: regId,
+        mapping_project_id: selectedProject?.id || null,
         latitude: form.latitude ? parseFloat(form.latitude) : null,
         longitude: form.longitude ? parseFloat(form.longitude) : null,
       }).select("id").single();
@@ -266,42 +227,56 @@ export default function RegisterPage() {
         <div className="space-y-4">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl">📍</span>
+              <span className="text-3xl">🗺️</span>
             </div>
-            <h2 className="text-xl font-bold mb-1">Where do you live?</h2>
-            <p className="text-sm text-[var(--text-secondary)]">Select your village{mappingProject?.zone_feature_enabled ? " and zone" : ""}</p>
+            <h2 className="text-xl font-bold mb-1">Mapping Area</h2>
+            <p className="text-sm text-[var(--text-secondary)]">Select your mapping project</p>
           </div>
-          {/* Mapping Scope */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-[var(--text)]">Current Mapping</label>
-            <div className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-gray-50 text-[var(--text-secondary)] text-sm flex items-center gap-2">
-              <MapPin size={16} /> {mappingProject?.name || "Loading..."} <span className="text-xs text-[var(--text-secondary)]">(admin controlled)</span>
+          {activeProjects.length === 1 ? (
+            <div className="w-full px-4 py-4 rounded-xl border border-[var(--border)] bg-gray-50 text-sm flex items-center gap-3">
+              <MapPin size={18} className="text-[var(--primary)]" />
+              <div>
+                <p className="font-medium">{activeProjects[0].name}</p>
+                <p className="text-xs text-[var(--text-secondary)]">(locked — single mapping mode)</p>
+              </div>
             </div>
-          </div>
-          {/* Village */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-[var(--text)]">Village <span className="text-[var(--error)]">*</span></label>
-            <select
-              value={form.villageId}
-              onChange={(e) => { update("villageId", e.target.value); const v = villages.find(v => v.id === e.target.value); if (v) update("villageName", v.name); }}
-              className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] text-sm"
-            >
-              <option value="">Select village...</option>
-              {villages.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
-            <Input placeholder="Or type village name..." value={form.villageName} onChange={(e) => { update("villageName", e.target.value); update("villageId", ""); }} />
-          </div>
-          {/* Zone / Locality (only if enabled by admin) */}
-          {mappingProject?.zone_feature_enabled && (
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-[var(--text)]">Zone / Locality <span className="text-[var(--text-secondary)] text-xs">(optional)</span></label>
-              <Input placeholder="e.g. Phungreitang, Wino East" value={form.zoneName} onChange={(e) => update("zoneName", e.target.value)} />
-              <p className="text-[10px] text-[var(--text-secondary)]">Leave blank if your village doesn&apos;t need zones</p>
+          ) : (
+            <div className="space-y-2">
+              {activeProjects.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setSelectedProject(p)}
+                  className={`w-full px-4 py-4 rounded-xl border-2 text-left transition flex items-center gap-3 ${
+                    selectedProject?.id === p.id
+                      ? "border-[var(--primary)] bg-[var(--primary)]/5"
+                      : "border-[var(--border)] hover:border-[var(--primary)]/50"
+                  }`}
+                >
+                  <MapPin size={18} className={selectedProject?.id === p.id ? "text-[var(--primary)]" : "text-[var(--text-secondary)]"} />
+                  <div>
+                    <p className="font-medium text-sm">{p.name}</p>
+                  </div>
+                  {selectedProject?.id === p.id && <Check size={16} className="ml-auto text-[var(--primary)]" />}
+                </button>
+              ))}
             </div>
           )}
         </div>
       );
       case 4: return (
+        <div className="space-y-4">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">📍</span>
+            </div>
+            <h2 className="text-xl font-bold mb-1">Where do you live?</h2>
+            <p className="text-sm text-[var(--text-secondary)]">Enter your complete location</p>
+          </div>
+          <Input label="Location" placeholder="e.g. Phungreitang East, Wino East, Kazar, Viewland" value={form.location} onChange={(e) => update("location", e.target.value)} />
+          <p className="text-[10px] text-[var(--text-secondary)]">Include the direction whenever applicable (e.g. &quot;Phungreitang East&quot; instead of just &quot;Phungreitang&quot;)</p>
+        </div>
+      );
+      case 5: return (
         <div className="space-y-4">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -316,17 +291,17 @@ export default function RegisterPage() {
               <p className={`font-medium ${form.houseType === "owned" ? "text-[var(--primary)]" : ""}`}>Owned</p>
             </button>
             <button onClick={() => update("houseType", "rent")} className={`p-6 rounded-2xl border-2 text-center transition ${form.houseType === "rent" ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)] hover:border-[var(--primary)]/50"}`}>
-              <Home size={32} className={`mx-auto mb-2 ${form.houseType === "rent" ? "text-[var(--primary)]" : "text-[var(--text-secondary)]"}`} />
+              <Home size={32} className={`mx-auto mb-2 ${form.houseType === "rent" ? "text-[var(--text-secondary)]" : ""}`} />
               <p className={`font-medium ${form.houseType === "rent" ? "text-[var(--primary)]" : ""}`}>Rented</p>
             </button>
           </div>
         </div>
       );
-      case 5: return (
+      case 6: return (
         <div className="space-y-4">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl">🗺️</span>
+              <span className="text-3xl">📌</span>
             </div>
             <h2 className="text-xl font-bold mb-1">Pin your location</h2>
             <p className="text-sm text-[var(--text-secondary)]">Provide a Google Maps link <strong>or</strong> coordinates</p>
@@ -350,7 +325,7 @@ export default function RegisterPage() {
           <Textarea label="Location description (optional)" placeholder="Blue gate beside the church..." value={form.locationDesc} onChange={(e) => update("locationDesc", e.target.value)} rows={2} hint="Earns 3 points. Helps riders find you." />
         </div>
       );
-      case 6: return (
+      case 7: return (
         <div className="space-y-4">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -362,7 +337,7 @@ export default function RegisterPage() {
           <PhotoUpload photos={photos} onPhotosChange={setPhotos} maxPhotos={4} />
         </div>
       );
-      case 7: return (
+      case 8: return (
         <div className="space-y-4">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -386,6 +361,42 @@ export default function RegisterPage() {
             <button onClick={addMember} className="w-full flex items-center justify-center gap-2 text-sm text-[var(--primary)] font-medium py-3 border-2 border-dashed border-[var(--primary)]/30 rounded-xl hover:bg-[var(--primary)]/5 transition">
               <Plus size={16} /> Add Member
             </button>
+          </div>
+        </div>
+      );
+      case 9: return (
+        <div className="space-y-4">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <FileCheck size={32} className="text-[var(--primary)]" />
+            </div>
+            <h2 className="text-xl font-bold mb-1">Review & Submit</h2>
+            <p className="text-sm text-[var(--text-secondary)]">Check your information before submitting</p>
+          </div>
+          <div className="space-y-3">
+            <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+              <div className="flex justify-between text-sm"><span className="text-[var(--text-secondary)]">Phone</span><span className="font-medium">{form.phone || "—"}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-[var(--text-secondary)]">Name</span><span className="font-medium">{form.fullName || "—"}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-[var(--text-secondary)]">Mapping</span><span className="font-medium">{selectedProject?.name || "—"}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-[var(--text-secondary)]">Location</span><span className="font-medium">{form.location || "—"}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-[var(--text-secondary)]">House Type</span><span className="font-medium capitalize">{form.houseType || "—"}</span></div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--text-secondary)]">Pin Location</span>
+                <span className="font-medium">{hasLocation() ? "✓ Provided" : "—"}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--text-secondary)]">Photos</span>
+                <span className="font-medium">{photos.length} uploaded</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--text-secondary)]">Members</span>
+                <span className="font-medium">{members.filter((m) => m.name.trim()).length} added</span>
+              </div>
+            </div>
+            <div className="bg-[var(--primary)]/5 border border-[var(--primary)]/20 rounded-xl p-4">
+              <p className="text-sm text-[var(--primary)] font-medium">Points: {points}/30</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">+10 bonus per referral when they register</p>
+            </div>
           </div>
         </div>
       );

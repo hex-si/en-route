@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, ToggleLeft, ToggleRight, X, RefreshCw, Globe, Check } from "lucide-react";
+import { Plus, Trash2, X, RefreshCw, Globe, Check, ToggleLeft, ToggleRight } from "lucide-react";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -11,6 +11,7 @@ interface MappingProject {
   name: string;
   is_active: boolean;
   zone_feature_enabled: boolean;
+  mode: string;
   created_at: string;
 }
 
@@ -19,7 +20,7 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", zone_feature_enabled: true });
+  const [form, setForm] = useState({ name: "", zone_feature_enabled: false, mode: "single" });
 
   const fetchProjects = useCallback(async () => {
     const res = await fetch("/api/admin/mapping-projects");
@@ -41,7 +42,7 @@ export default function AdminSettingsPage() {
         body: JSON.stringify(form),
       });
       const data = await res.json();
-      if (res.ok) { toast.success("Mapping project created"); setShowForm(false); setForm({ name: "", zone_feature_enabled: true }); fetchProjects(); }
+      if (res.ok) { toast.success("Mapping project created"); setShowForm(false); setForm({ name: "", zone_feature_enabled: false, mode: "single" }); fetchProjects(); }
       else { toast.error(data.error || "Failed"); }
     } catch { toast.error("Failed to create"); } finally { setSaving(false); }
   };
@@ -56,6 +57,27 @@ export default function AdminSettingsPage() {
     fetchProjects();
   };
 
+  const deactivateProject = async (id: string) => {
+    await fetch(`/api/admin/mapping-projects/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: false }),
+    });
+    toast.success("Mapping project deactivated");
+    fetchProjects();
+  };
+
+  const toggleMode = async (id: string, currentMode: string) => {
+    const newMode = currentMode === "single" ? "multiple" : "single";
+    await fetch(`/api/admin/mapping-projects/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: newMode }),
+    });
+    toast.success(`Switched to ${newMode} mapping mode`);
+    fetchProjects();
+  };
+
   const toggleZoneFeature = async (id: string, current: boolean) => {
     await fetch(`/api/admin/mapping-projects/${id}`, {
       method: "PATCH",
@@ -66,13 +88,14 @@ export default function AdminSettingsPage() {
   };
 
   const deleteProject = async (id: string) => {
-    if (!confirm("Delete this mapping project? Villages under it will also be deleted.")) return;
+    if (!confirm("Delete this mapping project?")) return;
     await fetch(`/api/admin/mapping-projects/${id}`, { method: "DELETE" });
     toast.success("Deleted");
     fetchProjects();
   };
 
-  const activeProject = projects.find((p) => p.is_active);
+  const activeProjects = projects.filter((p) => p.is_active);
+  const hasMultipleActive = activeProjects.length > 1;
 
   return (
     <div>
@@ -96,12 +119,10 @@ export default function AdminSettingsPage() {
             </div>
             <div>
               <p className="text-xs text-[var(--text-secondary)]">Current Mapping</p>
-              <p className="font-bold text-lg">{activeProject?.name || "None set"}</p>
-              {activeProject && (
-                <p className="text-xs text-[var(--text-secondary)]">
-                  Zone feature: {activeProject.zone_feature_enabled ? "Enabled" : "Disabled"}
-                </p>
-              )}
+              <p className="font-bold text-lg">{activeProjects.length === 1 ? activeProjects[0].name : activeProjects.length > 1 ? `${activeProjects.length} active projects` : "None set"}</p>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Mode: {activeProjects.length > 0 ? (activeProjects[0].mode === "single" ? "Single (locked)" : "Multiple (user selects)") : "—"}
+              </p>
             </div>
           </div>
         </CardContent>
@@ -112,12 +133,25 @@ export default function AdminSettingsPage() {
           <CardContent className="py-4">
             <form onSubmit={handleCreate} className="space-y-4">
               <Input placeholder="Project name (e.g. Kamjong)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Mapping Mode</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setForm({ ...form, mode: "single" })} className={`p-3 rounded-xl border-2 text-sm text-left transition ${form.mode === "single" ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)]"}`}>
+                    <p className="font-medium">Single</p>
+                    <p className="text-xs text-[var(--text-secondary)]">One active project, users don&apos;t choose</p>
+                  </button>
+                  <button type="button" onClick={() => setForm({ ...form, mode: "multiple" })} className={`p-3 rounded-xl border-2 text-sm text-left transition ${form.mode === "multiple" ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)]"}`}>
+                    <p className="font-medium">Multiple</p>
+                    <p className="text-xs text-[var(--text-secondary)]">Multiple active, users choose one</p>
+                  </button>
+                </div>
+              </div>
               <label className="flex items-center gap-3 cursor-pointer">
                 <input type="checkbox" checked={form.zone_feature_enabled} onChange={(e) => setForm({ ...form, zone_feature_enabled: e.target.checked })} className="w-4 h-4 rounded border-gray-300" />
                 <span className="text-sm">Enable zone/locality feature for this project</span>
               </label>
               <div className="flex gap-3">
-                <Button type="button" variant="secondary" size="sm" onClick={() => { setShowForm(false); setForm({ name: "", zone_feature_enabled: true }); }} className="flex-1">Cancel</Button>
+                <Button type="button" variant="secondary" size="sm" onClick={() => { setShowForm(false); setForm({ name: "", zone_feature_enabled: false, mode: "single" }); }} className="flex-1">Cancel</Button>
                 <Button type="submit" size="sm" loading={saving} className="flex-1">Create</Button>
               </div>
             </form>
@@ -141,19 +175,24 @@ export default function AdminSettingsPage() {
                     </div>
                     <div>
                       <p className="font-medium text-sm">{project.name}</p>
-                      <p className="text-xs text-[var(--text-secondary)]">Zone feature: {project.zone_feature_enabled ? "On" : "Off"}</p>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        Mode: {project.mode === "single" ? "Single" : "Multiple"} | Zones: {project.zone_feature_enabled ? "On" : "Off"}
+                      </p>
                     </div>
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${project.is_active ? "bg-[var(--primary)]/10 text-[var(--primary)]" : "bg-gray-100 text-gray-500"}`}>
                     {project.is_active ? "Active" : "Inactive"}
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  {!project.is_active && (
-                    <Button size="sm" onClick={() => activateProject(project.id)}>
-                      <ToggleRight size={14} className="mr-1" /> Activate
-                    </Button>
+                <div className="flex gap-2 flex-wrap">
+                  {!project.is_active ? (
+                    <Button size="sm" onClick={() => activateProject(project.id)}>Activate</Button>
+                  ) : (
+                    <Button size="sm" variant="secondary" onClick={() => deactivateProject(project.id)}>Deactivate</Button>
                   )}
+                  <Button size="sm" variant="secondary" onClick={() => toggleMode(project.id, project.mode)}>
+                    {project.mode === "single" ? "Switch to Multiple" : "Switch to Single"}
+                  </Button>
                   <Button size="sm" variant="secondary" onClick={() => toggleZoneFeature(project.id, project.zone_feature_enabled)}>
                     {project.zone_feature_enabled ? "Disable Zones" : "Enable Zones"}
                   </Button>

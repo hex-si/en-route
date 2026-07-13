@@ -11,7 +11,10 @@ interface UserData {
   full_name: string;
   phone: string;
   maps_link: string;
+  location: string | null;
   location_desc: string;
+  latitude: number | null;
+  longitude: number | null;
   photos: string[];
   points: number;
   verification_status: string;
@@ -23,6 +26,7 @@ interface UserData {
   zone_id: string | null;
   area_id: string | null;
   head_user_id: string | null;
+  mapping_project_id: string | null;
 }
 
 interface HouseholdMember {
@@ -58,9 +62,14 @@ function toWhatsAppPhone(phone: string): string {
 }
 
 const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; color: string }> = {
+  pending: { label: "Pending", icon: Clock, color: "text-yellow-600 bg-yellow-50" },
   pending_verification: { label: "Pending", icon: Clock, color: "text-yellow-600 bg-yellow-50" },
-  verified: { label: "Verified", icon: CheckCircle, color: "text-green-600 bg-green-50" },
+  under_review: { label: "Under Review", icon: Eye, color: "text-blue-600 bg-blue-50" },
   needs_clarification: { label: "Needs Info", icon: AlertCircle, color: "text-orange-600 bg-orange-50" },
+  verified: { label: "Verified", icon: CheckCircle, color: "text-green-600 bg-green-50" },
+  approved: { label: "Approved", icon: CheckCircle, color: "text-green-600 bg-green-50" },
+  completed: { label: "Completed", icon: CheckCircle, color: "text-green-600 bg-green-50" },
+  rejected: { label: "Rejected", icon: AlertCircle, color: "text-red-600 bg-red-50" },
 };
 
 const tabs = [
@@ -98,6 +107,7 @@ export default function AdminUserDetailPage() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editMapsLink, setEditMapsLink] = useState("");
+  const [editLocation, setEditLocation] = useState("");
   const [editLocationDesc, setEditLocationDesc] = useState("");
   const [editHouseType, setEditHouseType] = useState("");
   const [editZoneId, setEditZoneId] = useState("");
@@ -234,7 +244,7 @@ export default function AdminUserDetailPage() {
   const startEditing = async () => {
     if (!user) return;
     setEditName(user.full_name); setEditPhone(user.phone); setEditMapsLink(user.maps_link || "");
-    setEditLocationDesc(user.location_desc || ""); setEditHouseType(user.house_type || "");
+    setEditLocation(user.location || ""); setEditLocationDesc(user.location_desc || ""); setEditHouseType(user.house_type || "");
     setEditZoneId(user.zone_id || ""); setEditAreaId(user.area_id || "");
     setEditRegId(user.household_registration_id || ""); setEditNewZoneName(""); setEditing(true);
     if (user.zone_id) {
@@ -268,10 +278,10 @@ export default function AdminUserDetailPage() {
       }
       const res = await fetch(`/api/users/${id}/update`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full_name: editName, phone: editPhone, maps_link: editMapsLink, location_desc: editLocationDesc, house_type: editHouseType || null, zone_id: finalZoneId || null, area_id: finalAreaId || null, household_registration_id: finalRegId || null }),
+        body: JSON.stringify({ full_name: editName, phone: editPhone, maps_link: editMapsLink, location: editLocation, location_desc: editLocationDesc, house_type: editHouseType || null, zone_id: finalZoneId || null, area_id: finalAreaId || null, household_registration_id: finalRegId || null }),
       });
       if (!res.ok) throw new Error("Failed");
-      setUser((u) => u ? { ...u, full_name: editName, phone: editPhone, maps_link: editMapsLink, location_desc: editLocationDesc, house_type: editHouseType || null, zone_id: finalZoneId || null, area_id: finalAreaId || null, household_registration_id: finalRegId || null } : null);
+      setUser((u) => u ? { ...u, full_name: editName, phone: editPhone, maps_link: editMapsLink, location: editLocation, location_desc: editLocationDesc, house_type: editHouseType || null, zone_id: finalZoneId || null, area_id: finalAreaId || null, household_registration_id: finalRegId || null } : null);
       if (finalZoneId) { const matchedZone = zones.find((z) => z.id === finalZoneId) || (editNewZoneName.trim() ? { name: editNewZoneName.trim() } : null); if (matchedZone) setZoneName(matchedZone.name); }
       if (finalAreaId) { const matchedArea = editAreas.find((a) => a.id === finalAreaId); if (matchedArea) setAreaName(matchedArea.name); } else { setAreaName(null); }
       setEditing(false); toast.success("User updated");
@@ -356,6 +366,9 @@ export default function AdminUserDetailPage() {
               {user.household_registration_id && (
                 <div className="flex items-center justify-between"><span className="text-sm text-[var(--text-secondary)]">Registration ID</span><code className="text-sm font-mono font-medium text-[var(--primary)]">{user.household_registration_id}</code></div>
               )}
+              {user.location && (
+                <div className="flex items-center justify-between"><span className="text-sm text-[var(--text-secondary)]">Location</span><span className="text-sm font-medium">{user.location}</span></div>
+              )}
               {zoneName && (
                 <div className="flex items-center justify-between"><span className="text-sm text-[var(--text-secondary)]">Zone</span><span className="text-sm font-medium">{zoneName}{areaName ? ` > ${areaName}` : ""}</span></div>
               )}
@@ -392,9 +405,9 @@ export default function AdminUserDetailPage() {
                 </div>
               )}
               <div className="flex gap-2 flex-wrap">
-                {(["verified", "needs_clarification", "pending_verification"] as const).map((s) => (
+                {(["pending", "under_review", "needs_clarification", "verified", "rejected"] as const).map((s) => (
                   <Button key={s} size="sm" variant={user.verification_status === s ? "primary" : "secondary"} onClick={() => handleStatusClick(s)} loading={updating}>
-                    {statusConfig[s].label}
+                    {statusConfig[s]?.label || s}
                   </Button>
                 ))}
               </div>
@@ -407,12 +420,22 @@ export default function AdminUserDetailPage() {
         <Card>
           <CardHeader><h2 className="font-semibold text-sm">Location</h2></CardHeader>
           <CardContent className="space-y-4">
+            {user.location && (
+              <div><p className="text-xs text-[var(--text-secondary)] mb-1">Location</p><p className="text-sm font-medium">{user.location}</p></div>
+            )}
             <div>
               <p className="text-xs text-[var(--text-secondary)] mb-1">Google Maps Link</p>
-              <a href={user.maps_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-[var(--primary)] hover:underline">
-                Open in Maps <ExternalLink size={12} />
-              </a>
+              {user.maps_link ? (
+                <a href={user.maps_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-[var(--primary)] hover:underline">
+                  Open in Maps <ExternalLink size={12} />
+                </a>
+              ) : (
+                <p className="text-sm text-[var(--text-secondary)]">Not set</p>
+              )}
             </div>
+            {(user.latitude || user.longitude) && (
+              <div><p className="text-xs text-[var(--text-secondary)] mb-1">Coordinates</p><p className="text-sm font-mono">{user.latitude}, {user.longitude}</p></div>
+            )}
             {user.location_desc && (
               <div><p className="text-xs text-[var(--text-secondary)] mb-1">Description</p><p className="text-sm">{user.location_desc}</p></div>
             )}
@@ -615,6 +638,7 @@ export default function AdminUserDetailPage() {
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Full Name</label><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" /></div>
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Phone</label><input type="text" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" /></div>
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Google Maps Link</label><input type="text" value={editMapsLink} onChange={(e) => setEditMapsLink(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" /></div>
+              <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Location</label><input type="text" value={editLocation} onChange={(e) => setEditLocation(e.target.value)} placeholder="e.g. Phungreitang East" className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" /></div>
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Location Description</label><textarea value={editLocationDesc} onChange={(e) => setEditLocationDesc(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 resize-none" /></div>
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">House Type</label><select value={editHouseType} onChange={(e) => setEditHouseType(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 bg-white"><option value="">Not set</option><option value="owned">Owned</option><option value="rent">Rented</option></select></div>
               <div className="border-t border-[var(--border)] pt-3 mt-3"><p className="text-xs font-medium text-[var(--text)] mb-2">Zone & Registration</p></div>

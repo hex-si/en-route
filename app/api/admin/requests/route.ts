@@ -1,13 +1,13 @@
 ﻿import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const allowedFields = ["full_name", "phone", "maps_link", "location_desc", "photos", "house_type", "clarification_note"];
+const allowedFields = ["full_name", "phone", "maps_link", "location", "location_desc", "photos", "house_type", "clarification_note"];
 
 export async function GET() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("update_requests")
-    .select("*, users(full_name, phone)")
+    .select("*, users(full_name, phone, household_registration_id)")
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ requests: data });
@@ -26,6 +26,7 @@ export async function PATCH(request: Request) {
 
     if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
 
+    // Only apply changes on final approval
     if (status === "approved") {
       if (allowedFields.includes(req.field)) {
         const { error: updateError } = await supabase.from("users").update({ [req.field]: req.new_value }).eq("id", req.user_id);
@@ -95,7 +96,10 @@ export async function PATCH(request: Request) {
       }
     }
 
-    const updatePayload: Record<string, unknown> = { status, resolved_at: new Date().toISOString() };
+    const updatePayload: Record<string, unknown> = { status };
+    if (status === "approved" || status === "rejected" || status === "completed") {
+      updatePayload.resolved_at = new Date().toISOString();
+    }
     if (admin_notes !== undefined) updatePayload.admin_notes = admin_notes;
 
     const { error: resolveError } = await supabase

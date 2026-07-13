@@ -18,9 +18,14 @@ interface SearchResult {
 }
 
 const statusConfig = {
+  pending: { label: "Pending", icon: Clock, color: "text-yellow-600 bg-yellow-50" },
   pending_verification: { label: "Pending Verification", icon: Clock, color: "text-yellow-600 bg-yellow-50" },
-  verified: { label: "Verified", icon: CheckCircle, color: "text-green-600 bg-green-50" },
+  under_review: { label: "Under Review", icon: Clock, color: "text-blue-600 bg-blue-50" },
   needs_clarification: { label: "Needs Clarification", icon: AlertCircle, color: "text-orange-600 bg-orange-50" },
+  verified: { label: "Verified", icon: CheckCircle, color: "text-green-600 bg-green-50" },
+  approved: { label: "Approved", icon: CheckCircle, color: "text-green-600 bg-green-50" },
+  completed: { label: "Completed", icon: CheckCircle, color: "text-green-600 bg-green-50" },
+  rejected: { label: "Rejected", icon: AlertCircle, color: "text-red-600 bg-red-50" },
 };
 
 export default function CheckPage() {

@@ -10,9 +10,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json();
 
-  // If activating, deactivate all others first
-  if (body.is_active === true) {
+  // If setting mode to single, deactivate all others
+  if (body.mode === "single" || body.is_active === true) {
     await supabase.from("mapping_projects").update({ is_active: false }).neq("id", id);
+    body.is_active = true;
   }
 
   const { data, error } = await supabase

@@ -10,7 +10,7 @@ export async function PATCH(
     const body = await request.json();
     const supabase = createAdminClient();
 
-    const allowedFields = ["full_name", "phone", "maps_link", "location_desc", "house_type", "zone_id", "area_id", "household_registration_id", "photos", "verification_status", "clarification_note"];
+    const allowedFields = ["full_name", "phone", "maps_link", "location", "location_desc", "house_type", "zone_id", "area_id", "household_registration_id", "photos", "verification_status", "clarification_note", "latitude", "longitude", "mapping_project_id"];
     const updateData: Record<string, unknown> = {};
     for (const key of allowedFields) {
       if (key in body) updateData[key] = body[key];

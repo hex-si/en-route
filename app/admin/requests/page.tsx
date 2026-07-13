@@ -1,6 +1,6 @@
 ﻿"use client";
 import { useState, useEffect, useCallback } from "react";
-import { CheckCircle, XCircle, Clock, RefreshCw, FileText, ExternalLink } from "lucide-react";
+import { CheckCircle, XCircle, Clock, RefreshCw, FileText, ExternalLink, AlertCircle, Eye } from "lucide-react";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -19,19 +19,26 @@ interface Request {
 
 const statusIcon: Record<string, typeof CheckCircle> = {
   pending: Clock,
+  under_review: Eye,
+  needs_clarification: AlertCircle,
   approved: CheckCircle,
+  completed: CheckCircle,
   rejected: XCircle,
 };
 
 const statusColor: Record<string, string> = {
   pending: "text-yellow-600 bg-yellow-50",
+  under_review: "text-blue-600 bg-blue-50",
+  needs_clarification: "text-orange-600 bg-orange-50",
   approved: "text-green-600 bg-green-50",
+  completed: "text-green-600 bg-green-50",
   rejected: "text-red-600 bg-red-50",
 };
 
 const fieldLabels: Record<string, string> = {
-  full_name: "Full Name", phone: "Phone Number", maps_link: "Google Maps Link",
-  location_desc: "Location Description", photos: "Photos", house_type: "House Type",
+  full_name: "Full Name", phone: "Phone Number", location: "Location",
+  maps_link: "Google Maps Link", location_desc: "Location Description",
+  photos: "Photos", house_type: "House Type",
   clarification_note: "Clarification Note", spouse_name: "Spouse Name", spouse_phone: "Spouse Phone",
   family_name: "Family Member Name", family_phone: "Family Member Phone",
   add_member: "Add Household Member", remove_member: "Remove Household Member",
@@ -39,7 +46,7 @@ const fieldLabels: Record<string, string> = {
 };
 
 const fieldIcons: Record<string, string> = {
-  full_name: "👤", phone: "📱", maps_link: "🗺️", location_desc: "📍",
+  full_name: "👤", phone: "📱", location: "📍", maps_link: "🗺️", location_desc: "📍",
   photos: "📷", house_type: "🏠", add_member: "👥", remove_member: "👥",
   manual: "📝", independent_household: "🏠",
 };
@@ -60,17 +67,19 @@ export default function AdminRequestsPage() {
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
   useEffect(() => { const interval = setInterval(() => { fetchRequests(); }, 10000); return () => clearInterval(interval); }, [fetchRequests]);
 
-  const handleAction = async (id: string, action: "approved" | "rejected") => {
+  const handleAction = async (id: string, action: "approved" | "rejected" | "under_review" | "needs_clarification" | "completed") => {
     setProcessing(id);
     try {
       const res = await fetch("/api/admin/requests", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status: action }) });
-      if (res.ok) { toast.success(`Request ${action}`); fetchRequests(); } else { const data = await res.json(); toast.error(data.error || "Failed"); }
+      if (res.ok) { toast.success(`Request updated to ${action.replace(/_/g, " ")}`); fetchRequests(); } else { const data = await res.json(); toast.error(data.error || "Failed"); }
     } catch { toast.error("Failed"); } finally { setProcessing(null); }
   };
 
   const filtered = filter === "all" ? requests : requests.filter((r) => r.status === filter);
   const counts = {
     pending: requests.filter((r) => r.status === "pending").length,
+    under_review: requests.filter((r) => r.status === "under_review").length,
+    needs_clarification: requests.filter((r) => r.status === "needs_clarification").length,
     approved: requests.filter((r) => r.status === "approved").length,
     rejected: requests.filter((r) => r.status === "rejected").length,
   };
@@ -90,6 +99,8 @@ export default function AdminRequestsPage() {
       <div className="flex gap-2 mb-6 flex-wrap">
         {[
           { key: "pending", label: "Pending", count: counts.pending, color: "yellow" },
+          { key: "under_review", label: "Under Review", count: counts.under_review, color: "blue" },
+          { key: "needs_clarification", label: "Needs Info", count: counts.needs_clarification, color: "orange" },
           { key: "approved", label: "Approved", count: counts.approved, color: "green" },
           { key: "rejected", label: "Rejected", count: counts.rejected, color: "red" },
           { key: "all", label: "All", count: requests.length, color: "gray" },
@@ -104,7 +115,7 @@ export default function AdminRequestsPage() {
       {loading && requests.length === 0 ? (
         <div className="text-center py-12 text-[var(--text-secondary)]">Loading...</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-12 text-[var(--text-secondary)]">No {filter === "all" ? "" : filter} requests</div>
+        <div className="text-center py-12 text-[var(--text-secondary)]">No {filter === "all" ? "" : filter.replace(/_/g, " ")} requests</div>
       ) : (
         <div className="space-y-3">
           {filtered.map((req) => {
@@ -128,7 +139,7 @@ export default function AdminRequestsPage() {
                       </div>
                     </div>
                     <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${statusColor[req.status]}`}>
-                      <Icon size={12} /> {req.status}
+                      <Icon size={12} /> {req.status.replace(/_/g, " ")}
                     </span>
                   </div>
 
@@ -157,6 +168,32 @@ export default function AdminRequestsPage() {
                         <ExternalLink size={10} /> View User
                       </a>
                       {req.status === "pending" && (
+                        <>
+                          <Button size="sm" onClick={() => handleAction(req.id, "under_review")} loading={processing === req.id}>
+                            <Eye size={14} className="mr-1" /> Review
+                          </Button>
+                          <Button size="sm" onClick={() => handleAction(req.id, "approved")} loading={processing === req.id}>
+                            <CheckCircle size={14} className="mr-1" /> Approve
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => handleAction(req.id, "rejected")} loading={processing === req.id}>
+                            <XCircle size={14} className="mr-1" /> Reject
+                          </Button>
+                        </>
+                      )}
+                      {req.status === "under_review" && (
+                        <>
+                          <Button size="sm" onClick={() => handleAction(req.id, "needs_clarification")} loading={processing === req.id}>
+                            <AlertCircle size={14} className="mr-1" /> Needs Info
+                          </Button>
+                          <Button size="sm" onClick={() => handleAction(req.id, "approved")} loading={processing === req.id}>
+                            <CheckCircle size={14} className="mr-1" /> Approve
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => handleAction(req.id, "rejected")} loading={processing === req.id}>
+                            <XCircle size={14} className="mr-1" /> Reject
+                          </Button>
+                        </>
+                      )}
+                      {req.status === "needs_clarification" && (
                         <>
                           <Button size="sm" onClick={() => handleAction(req.id, "approved")} loading={processing === req.id}>
                             <CheckCircle size={14} className="mr-1" /> Approve

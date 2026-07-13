@@ -23,6 +23,7 @@ interface UserData {
   verification_status: string;
   clarification_note: string | null;
   photos: string[];
+  location: string | null;
   location_desc: string;
   maps_link: string;
   house_type: string | null;
@@ -31,6 +32,9 @@ interface UserData {
   zone_id: string | null;
   area_id: string | null;
   village_id: string | null;
+  mapping_project_id: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface HouseholdMember {
@@ -65,17 +69,23 @@ const updateFields = [
   { key: "remove_member", label: "Remove Household Member" },
 ];
 
-const statusIcon: Record<string, typeof CheckCircle> = {
-  pending: Clock,
-  approved: CheckCircle,
-  rejected: XCircle,
-};
+  const statusIcon: Record<string, typeof CheckCircle> = {
+    pending: Clock,
+    under_review: Clock,
+    needs_clarification: AlertCircle,
+    approved: CheckCircle,
+    completed: CheckCircle,
+    rejected: XCircle,
+  };
 
-const statusColor: Record<string, string> = {
-  pending: "text-yellow-600 bg-yellow-50",
-  approved: "text-green-600 bg-green-50",
-  rejected: "text-red-600 bg-red-50",
-};
+  const statusColor: Record<string, string> = {
+    pending: "text-yellow-600 bg-yellow-50",
+    under_review: "text-blue-600 bg-blue-50",
+    needs_clarification: "text-orange-600 bg-orange-50",
+    approved: "text-green-600 bg-green-50",
+    completed: "text-green-600 bg-green-50",
+    rejected: "text-red-600 bg-red-50",
+  };
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -323,9 +333,14 @@ export default function DashboardPage() {
   };
 
   const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
+    pending: { label: "Pending", color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200" },
     pending_verification: { label: "Pending Verification", color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200" },
-    verified: { label: "Verified", color: "text-green-700", bg: "bg-green-50 border-green-200" },
+    under_review: { label: "Under Review", color: "text-blue-700", bg: "bg-blue-50 border-blue-200" },
     needs_clarification: { label: "Needs Info", color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
+    verified: { label: "Verified", color: "text-green-700", bg: "bg-green-50 border-green-200" },
+    approved: { label: "Approved", color: "text-green-700", bg: "bg-green-50 border-green-200" },
+    completed: { label: "Completed", color: "text-green-700", bg: "bg-green-50 border-green-200" },
+    rejected: { label: "Rejected", color: "text-red-700", bg: "bg-red-50 border-red-200" },
   };
 
   const handleSavePhotos = async () => {
@@ -405,7 +420,7 @@ export default function DashboardPage() {
 
   const breakdown = getPointsBreakdown({
     fullName: user.full_name, phone: user.phone, mapsLink: user.maps_link,
-    photos: user.photos || [], locationDesc: user.location_desc || "", hasFamilyMember: members.length > 0,
+    photos: user.photos || [], locationDesc: user.location_desc || "", location: user.location || "", hasFamilyMember: members.length > 0,
   });
 
   const houseTypeLabel = user.house_type === "owned" ? "Owned" : user.house_type === "rent" ? "Rented" : null;
@@ -655,6 +670,7 @@ export default function DashboardPage() {
                 <option value="">Select what to update...</option>
                 <option value="full_name">👤 Full Name</option>
                 <option value="phone">📱 Phone Number</option>
+                <option value="location">📍 Location</option>
                 <option value="maps_link">🗺️ Google Maps Link</option>
                 <option value="location_desc">📍 Location Description</option>
                 <option value="photos">📷 Upload New Photo</option>
@@ -687,6 +703,19 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs text-[var(--text-secondary)] mb-1">New Name</p>
                     <Input placeholder="Enter new full name" value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} />
+                  </div>
+                </div>
+              )}
+
+              {updateField === "location" && (
+                <div className="space-y-3 bg-gray-50 rounded-xl p-4">
+                  <div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">Current Location</p>
+                    <p className="text-sm font-medium">{user.location || <span className="text-[var(--text-secondary)]">Not set</span>}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">New Location</p>
+                    <Input placeholder="e.g. Phungreitang East" value={updateValue} onChange={(e) => setUpdateValue(e.target.value)} />
                   </div>
                 </div>
               )}
