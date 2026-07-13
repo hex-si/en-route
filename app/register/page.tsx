@@ -1,14 +1,13 @@
 ﻿"use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { MapPin, ArrowLeft, Plus, X, Navigation } from "lucide-react";
+import { MapPin, ArrowLeft, ArrowRight, Plus, X, Navigation, Check, Home, Camera, Users } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { PhotoUpload } from "@/components/ui/PhotoUpload";
-import { ProgressBar } from "@/components/ui/ProgressBar";
 import { calculatePoints } from "@/lib/points";
 import { generateReferralCode } from "@/lib/referrals";
 import { phonesMatch } from "@/lib/phone";
@@ -19,20 +18,63 @@ interface Member {
   phone: string;
 }
 
+const steps = [
+  { id: 1, label: "Phone", icon: "📱" },
+  { id: 2, label: "Name", icon: "👤" },
+  { id: 3, label: "Location", icon: "📍" },
+  { id: 4, label: "House", icon: "🏠" },
+  { id: 5, label: "Maps", icon: "🗺️" },
+  { id: 6, label: "Photos", icon: "📷" },
+  { id: 7, label: "Members", icon: "👥" },
+];
+
 export default function RegisterPage() {
   const router = useRouter();
+  const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [villages, setVillages] = useState<{ id: string; name: string }[]>([]);
+  const [areas, setAreas] = useState<{ id: string; name: string; code: string }[]>([]);
   const [form, setForm] = useState({
-    fullName: "",
     phone: "",
-    mapsLink: "",
-    locationDesc: "",
-    houseType: "",
-    zoneId: "",
+    fullName: "",
+    district: "Ukhrul",
+    villageId: "",
+    villageName: "",
     areaId: "",
+    areaName: "",
+    houseType: "",
+    mapsLink: "",
+    latitude: "",
+    longitude: "",
+    locationDesc: "",
   });
+
+  useEffect(() => {
+    const fetchVillages = async () => {
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.from("villages").select("id, name").eq("district", "Ukhrul").eq("is_active", true).order("name");
+        if (data) setVillages(data);
+      } catch {}
+    };
+    fetchVillages();
+  }, []);
+
+  useEffect(() => {
+    const fetchAreas = async () => {
+      if (!form.villageId) { setAreas([]); return; }
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.from("areas").select("id, name, code").eq("village_id", form.villageId).order("name");
+        setAreas(data || []);
+      } catch { setAreas([]); }
+    };
+    fetchAreas();
+  }, [form.villageId]);
+
+  const update = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
   const points = useMemo(() => calculatePoints({
     fullName: form.fullName,
@@ -43,155 +85,126 @@ export default function RegisterPage() {
     hasFamilyMember: members.length > 0,
   }), [form, photos, members]);
 
-  const update = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
+  const progress = Math.round((currentStep / steps.length) * 100);
 
-  const addMember = () => {
-    setMembers((m) => [...m, { name: "", phone: "" }]);
-  };
-
-  const updateMember = (index: number, field: "name" | "phone", value: string) => {
-    setMembers((m) => m.map((mem, i) => i === index ? { ...mem, [field]: value } : mem));
-  };
-
-  const removeMember = (index: number) => {
-    setMembers((m) => m.filter((_, i) => i !== index));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.fullName || !form.phone || !form.mapsLink || !form.zoneId) {
-      toast.error("Name, phone, Google Maps link, and Zone are required");
-      return;
+  const canProceed = () => {
+    switch (currentStep) {
+      case 1: return form.phone.trim().length >= 10;
+      case 2: return form.fullName.trim().length > 0;
+      case 3: return form.villageId || form.villageName.trim();
+      case 4: return true;
+      case 5: return form.mapsLink.trim().length > 0;
+      case 6: return true;
+      case 7: return true;
+      default: return true;
     }
+  };
+
+  const nextStep = () => {
+    if (currentStep < steps.length && canProceed()) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 1) setCurrentStep(currentStep - 1);
+  };
+
+  const addMember = () => setMembers((m) => [...m, { name: "", phone: "" }]);
+  const updateMember = (i: number, field: "name" | "phone", value: string) => setMembers((m) => m.map((mem, idx) => idx === i ? { ...mem, [field]: value } : mem));
+  const removeMember = (i: number) => setMembers((m) => m.filter((_, idx) => idx !== i));
+
+  const handleSubmit = async () => {
     setLoading(true);
     try {
       const supabase = createClient();
       const referralCode = generateReferralCode();
-
       const params = new URLSearchParams(window.location.search);
       const refCode = params.get("ref");
       let referredBy = null;
       if (refCode) {
-        const { data: referrer } = await supabase
-          .from("users")
-          .select("id")
-          .eq("referral_code", refCode)
-          .single();
+        const { data: referrer } = await supabase.from("users").select("id").eq("referral_code", refCode).single();
         if (referrer) referredBy = referrer.id;
       }
 
-      // Find or create zone by name
-      const zoneNameVal = form.zoneId.trim();
-      let { data: zone } = await supabase
-        .from("zones")
-        .select("id, prefix")
-        .eq("name", zoneNameVal)
-        .single();
-
-      if (!zone) {
-        const prefix = zoneNameVal
-          .split(/\s+/)
-          .map((w: string) => w[0])
-          .join("")
-          .toUpperCase()
-          .slice(0, 3);
-        const { data: newZone } = await supabase
-          .from("zones")
-          .insert({ name: zoneNameVal, prefix })
-          .select("id, prefix")
-          .single();
-        zone = newZone;
+      // Find or create village
+      let villageId = form.villageId;
+      if (!villageId && form.villageName.trim()) {
+        let { data: village } = await supabase.from("villages").select("id").eq("name", form.villageName.trim()).eq("district", "Ukhrul").single();
+        if (!village) {
+          const { data: newVillage } = await supabase.from("villages").insert({ name: form.villageName.trim(), district: "Ukhrul" }).select("id").single();
+          village = newVillage;
+        }
+        if (village) villageId = village.id;
       }
 
-      if (!zone) {
-        toast.error("Failed to create zone. Please try again.");
-        setLoading(false);
-        return;
-      }
-
-      // Find or create area by name (if provided)
-      let areaId = null;
-      const areaNameVal = form.areaId.trim();
-      if (areaNameVal) {
-        let { data: area } = await supabase
-          .from("areas")
-          .select("id")
-          .eq("zone_id", zone.id)
-          .ilike("name", areaNameVal)
-          .single();
-
+      // Find or create area
+      let areaId = form.areaId;
+      if (!areaId && form.areaName.trim() && villageId) {
+        let { data: area } = await supabase.from("areas").select("id").eq("village_id", villageId).ilike("name", form.areaName.trim()).single();
         if (!area) {
-          const areaCode = areaNameVal.split(/\s+/).map((w: string) => w[0]).join("").toUpperCase().slice(0, 3);
-          const { data: newArea } = await supabase
-            .from("areas")
-            .insert({ name: areaNameVal, zone_id: zone.id, code: areaCode })
-            .select("id")
-            .single();
+          const areaCode = form.areaName.trim().split(/\s+/).map((w: string) => w[0]).join("").toUpperCase().slice(0, 3);
+          const { data: newArea } = await supabase.from("areas").insert({ name: form.areaName.trim(), village_id: villageId, zone_id: null, code: areaCode }).select("id").single();
           area = newArea;
         }
         if (area) areaId = area.id;
       }
 
-      // Generate household registration ID via RPC
-      const { data: regId, error: regIdError } = await supabase.rpc(
-        "generate_household_registration_id",
-        { zone_uuid: zone.id, area_uuid: areaId }
-      );
-      if (regIdError) {
-        toast.error("Failed to generate registration ID. Please try again.");
-        setLoading(false);
-        return;
+      // Find or create zone for household ID
+      let zoneId = null;
+      if (villageId) {
+        let { data: zone } = await supabase.from("zones").select("id").eq("name", form.villageName.trim() || "Ukhrul").single();
+        if (!zone) {
+          const prefix = (form.villageName.trim() || "Ukhrul").split(/\s+/).map((w: string) => w[0]).join("").toUpperCase().slice(0, 3);
+          const { data: newZone } = await supabase.from("zones").insert({ name: form.villageName.trim() || "Ukhrul", prefix }).select("id").single();
+          zone = newZone;
+        }
+        if (zone) zoneId = zone.id;
       }
 
-      const { data: user, error: userError } = await supabase
-        .from("users")
-        .insert({
-          full_name: form.fullName,
-          phone: form.phone,
-          maps_link: form.mapsLink,
-          location_desc: form.locationDesc || null,
-          house_type: form.houseType || null,
-          photos,
-          points,
-          referral_code: referralCode,
-          referred_by: referredBy,
-          zone_id: zone.id,
-          area_id: areaId,
-          household_registration_id: regId,
-        })
-        .select("id")
-        .single();
+      // Generate household registration ID
+      let regId = null;
+      if (zoneId) {
+        const { data } = await supabase.rpc("generate_household_registration_id", { zone_uuid: zoneId, area_uuid: areaId });
+        regId = data;
+      }
+
+      const { data: user, error: userError } = await supabase.from("users").insert({
+        full_name: form.fullName,
+        phone: form.phone,
+        maps_link: form.mapsLink,
+        location_desc: form.locationDesc || null,
+        house_type: form.houseType || null,
+        photos,
+        points,
+        referral_code: referralCode,
+        referred_by: referredBy,
+        zone_id: zoneId,
+        area_id: areaId,
+        village_id: villageId,
+        household_registration_id: regId,
+        latitude: form.latitude ? parseFloat(form.latitude) : null,
+        longitude: form.longitude ? parseFloat(form.longitude) : null,
+      }).select("id").single();
 
       if (userError) {
-        if (userError.code === "23505") {
-          toast.error("This phone number is already registered");
-        } else {
-          toast.error("Registration failed. Please try again.");
-        }
+        if (userError.code === "23505") { toast.error("This phone number is already registered"); }
+        else { toast.error("Registration failed. Please try again."); }
         return;
       }
 
-      // Insert household members
       const validMembers = members.filter((m) => m.name.trim() && m.phone.trim());
       if (validMembers.length > 0) {
-        await supabase.from("household_members").insert(
-          validMembers.map((m) => ({ user_id: user.id, name: m.name.trim(), phone: m.phone.trim() }))
-        );
+        await supabase.from("household_members").insert(validMembers.map((m) => ({ user_id: user.id, name: m.name.trim(), phone: m.phone.trim() })));
       }
 
-      // If this registrant was previously listed as a household member of another
-      // user, link the two accounts and mark the member row as promoted.
-      const { data: memberMatches } = await supabase
-        .from("household_members")
-        .select("id, user_id, phone")
-        .filter("promoted_user_id", "is", null);
+      const { data: memberMatches } = await supabase.from("household_members").select("id, user_id, phone").filter("promoted_user_id", "is", null);
       const linkedMember = (memberMatches || []).find((m) => phonesMatch(m.phone, form.phone));
       if (linkedMember) {
         await supabase.from("users").update({ head_user_id: linkedMember.user_id }).eq("id", user.id);
         await supabase.from("household_members").update({ promoted_user_id: user.id }).eq("id", linkedMember.id);
       }
 
-      // Log points
       const pointEntries = [];
       if (form.fullName) pointEntries.push({ user_id: user.id, amount: 5, reason: "registration: full_name" });
       if (form.phone) pointEntries.push({ user_id: user.id, amount: 5, reason: "registration: phone" });
@@ -199,12 +212,8 @@ export default function RegisterPage() {
       if (photos.length > 0) pointEntries.push({ user_id: user.id, amount: 4, reason: "registration: photos" });
       if (form.locationDesc) pointEntries.push({ user_id: user.id, amount: 3, reason: "registration: location_desc" });
       if (validMembers.length > 0) pointEntries.push({ user_id: user.id, amount: 3, reason: "registration: household_member" });
+      if (pointEntries.length > 0) await supabase.from("points_log").insert(pointEntries);
 
-      if (pointEntries.length > 0) {
-        await supabase.from("points_log").insert(pointEntries);
-      }
-
-      // Handle referral
       if (referredBy) {
         await supabase.from("referrals").insert({ referrer_id: referredBy, referred_id: user.id });
         const { data: refData } = await supabase.from("users").select("points").eq("id", referredBy).single();
@@ -224,6 +233,166 @@ export default function RegisterPage() {
     }
   };
 
+  const renderStep = () => {
+    switch (currentStep) {
+      case 1: return (
+        <div className="space-y-4">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">📱</span>
+            </div>
+            <h2 className="text-xl font-bold mb-1">What&apos;s your phone number?</h2>
+            <p className="text-sm text-[var(--text-secondary)]">We&apos;ll use this to identify your account</p>
+          </div>
+          <Input
+            type="tel"
+            placeholder="+91XXXXXXXXXX"
+            value={form.phone}
+            onChange={(e) => update("phone", e.target.value)}
+          />
+        </div>
+      );
+      case 2: return (
+        <div className="space-y-4">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">👤</span>
+            </div>
+            <h2 className="text-xl font-bold mb-1">Your full name</h2>
+            <p className="text-sm text-[var(--text-secondary)]">As it appears on your ID</p>
+          </div>
+          <Input
+            placeholder="e.g. Jihal Shimray"
+            value={form.fullName}
+            onChange={(e) => update("fullName", e.target.value)}
+          />
+        </div>
+      );
+      case 3: return (
+        <div className="space-y-4">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">📍</span>
+            </div>
+            <h2 className="text-xl font-bold mb-1">Where do you live?</h2>
+            <p className="text-sm text-[var(--text-secondary)]">Select your village and area</p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-[var(--text)]">District</label>
+            <div className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-gray-50 text-[var(--text-secondary)] text-sm flex items-center gap-2">
+              <Home size={16} /> Ukhrul <span className="text-xs text-[var(--text-secondary)]">(locked)</span>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-[var(--text)]">Village <span className="text-[var(--error)]">*</span></label>
+            <select
+              value={form.villageId}
+              onChange={(e) => { update("villageId", e.target.value); const v = villages.find(v => v.id === e.target.value); if (v) update("villageName", v.name); }}
+              className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] text-sm"
+            >
+              <option value="">Select village...</option>
+              {villages.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+            <Input placeholder="Or type village name..." value={form.villageName} onChange={(e) => { update("villageName", e.target.value); update("villageId", ""); }} />
+          </div>
+          {form.villageId && areas.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[var(--text)]">Area / Subdivision <span className="text-[var(--text-secondary)] text-xs">(optional)</span></label>
+              <select value={form.areaId} onChange={(e) => update("areaId", e.target.value)} className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] text-sm">
+                <option value="">No subdivision</option>
+                {areas.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+      );
+      case 4: return (
+        <div className="space-y-4">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">🏠</span>
+            </div>
+            <h2 className="text-xl font-bold mb-1">House type</h2>
+            <p className="text-sm text-[var(--text-secondary)]">Do you own or rent?</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => update("houseType", "owned")} className={`p-6 rounded-2xl border-2 text-center transition ${form.houseType === "owned" ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)] hover:border-[var(--primary)]/50"}`}>
+              <Home size={32} className={`mx-auto mb-2 ${form.houseType === "owned" ? "text-[var(--primary)]" : "text-[var(--text-secondary)]"}`} />
+              <p className={`font-medium ${form.houseType === "owned" ? "text-[var(--primary)]" : ""}`}>Owned</p>
+            </button>
+            <button onClick={() => update("houseType", "rent")} className={`p-6 rounded-2xl border-2 text-center transition ${form.houseType === "rent" ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)] hover:border-[var(--primary)]/50"}`}>
+              <Home size={32} className={`mx-auto mb-2 ${form.houseType === "rent" ? "text-[var(--primary)]" : "text-[var(--text-secondary)]"}`} />
+              <p className={`font-medium ${form.houseType === "rent" ? "text-[var(--primary)]" : ""}`}>Rented</p>
+            </button>
+          </div>
+        </div>
+      );
+      case 5: return (
+        <div className="space-y-4">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">🗺️</span>
+            </div>
+            <h2 className="text-xl font-bold mb-1">Pin your location</h2>
+            <p className="text-sm text-[var(--text-secondary)]">Help riders find you easily</p>
+          </div>
+          <Input label="Google Maps Link" placeholder="https://maps.app.goo.gl/..." value={form.mapsLink} onChange={(e) => update("mapsLink", e.target.value)} />
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => window.open("https://maps.google.com", "_blank")} className="flex items-center gap-1.5 text-xs text-[var(--primary)] hover:underline">
+              <Navigation size={12} /> Open Google Maps
+            </button>
+            <span className="text-xs text-[var(--text-secondary)]">— Drop pin, Share, copy link</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Latitude (optional)" placeholder="25.1234" value={form.latitude} onChange={(e) => update("latitude", e.target.value)} />
+            <Input label="Longitude (optional)" placeholder="94.5678" value={form.longitude} onChange={(e) => update("longitude", e.target.value)} />
+          </div>
+          <Textarea label="Location description (optional)" placeholder="Blue gate beside the church..." value={form.locationDesc} onChange={(e) => update("locationDesc", e.target.value)} rows={2} hint="Earns 3 points. Helps riders find you." />
+        </div>
+      );
+      case 6: return (
+        <div className="space-y-4">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Camera size={32} className="text-[var(--primary)]" />
+            </div>
+            <h2 className="text-xl font-bold mb-1">House photos</h2>
+            <p className="text-sm text-[var(--text-secondary)]">Upload up to 4 photos of your house</p>
+          </div>
+          <PhotoUpload photos={photos} onPhotosChange={setPhotos} maxPhotos={4} />
+        </div>
+      );
+      case 7: return (
+        <div className="space-y-4">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-[var(--primary)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Users size={32} className="text-[var(--primary)]" />
+            </div>
+            <h2 className="text-xl font-bold mb-1">Household members</h2>
+            <p className="text-sm text-[var(--text-secondary)]">Everyone at your address with a phone</p>
+          </div>
+          <div className="space-y-3">
+            {members.map((member, i) => (
+              <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+                <div className="flex-1 grid grid-cols-2 gap-2">
+                  <Input placeholder="Name" value={member.name} onChange={(e) => updateMember(i, "name", e.target.value)} />
+                  <Input placeholder="Phone" type="tel" value={member.phone} onChange={(e) => updateMember(i, "phone", e.target.value)} />
+                </div>
+                <button onClick={() => removeMember(i)} className="p-2 text-[var(--text-secondary)] hover:text-[var(--error)] hover:bg-red-50 rounded-lg transition">
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
+            <button onClick={addMember} className="w-full flex items-center justify-center gap-2 text-sm text-[var(--primary)] font-medium py-3 border-2 border-dashed border-[var(--primary)]/30 rounded-xl hover:bg-[var(--primary)]/5 transition">
+              <Plus size={16} /> Add Member
+            </button>
+          </div>
+        </div>
+      );
+      default: return null;
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[var(--bg)]">
       <div className="max-w-lg mx-auto px-5 py-8">
@@ -231,167 +400,53 @@ export default function RegisterPage() {
           <ArrowLeft size={16} /> Back
         </Link>
 
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-[var(--primary)] rounded-xl flex items-center justify-center">
-            <MapPin className="text-white" size={20} />
+        {/* Progress Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-[var(--text)]">Step {currentStep} of {steps.length}</span>
+            <span className="text-sm font-medium text-[var(--primary)]">{progress}%</span>
           </div>
-          <div>
-            <h1 className="text-xl font-bold">Register Household</h1>
-            <p className="text-xs text-[var(--text-secondary)]">Fill in your details to join En-Route</p>
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full bg-[var(--primary)] rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
-        </div>
-
-        <div className="mb-6">
-          <ProgressBar current={points} max={30} />
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <Input
-            label="Full Name"
-            placeholder="Your full name"
-            value={form.fullName}
-            onChange={(e) => update("fullName", e.target.value)}
-            required
-          />
-
-          <Input
-            label="Phone Number"
-            type="tel"
-            placeholder="+91XXXXXXXXXX"
-            value={form.phone}
-            onChange={(e) => update("phone", e.target.value)}
-            required
-          />
-
-          {/* Zone Selection */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Zone <span className="text-[var(--error)]">*</span>
-            </label>
-            <Input
-              placeholder="e.g. Phungreitang – East, Wino – West..."
-              value={form.zoneId}
-              onChange={(e) => update("zoneId", e.target.value)}
-              required
-            />
-          </div>
-
-          {/* Area/Subdivision (optional, manual entry) */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Area / Subdivision <span className="text-[var(--text-secondary)] text-xs">(optional)</span>
-            </label>
-            <Input
-              placeholder="e.g. Kazar, Dungri..."
-              value={form.areaId}
-              onChange={(e) => update("areaId", e.target.value)}
-            />
-            {form.zoneId.trim() && (
-              <p className="text-[10px] text-[var(--text-secondary)]">
-                Your Household ID will be: <span className="font-mono font-medium text-[var(--primary)]">
-                  {form.zoneId.trim().split(/\s+/).map((w: string) => w[0]).join("").toUpperCase().slice(0, 3)}{form.areaId.trim() ? `-${form.areaId.trim()[0].toUpperCase()}` : ""}-001
-                </span>
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Google Maps Location Link <span className="text-[var(--error)]">*</span>
-            </label>
-            <Input
-              placeholder="https://maps.app.goo.gl/..."
-              value={form.mapsLink}
-              onChange={(e) => update("mapsLink", e.target.value)}
-              required
-            />
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => window.open("https://maps.google.com", "_blank")}
-                className="flex items-center gap-1.5 text-xs text-[var(--primary)] hover:underline"
-              >
-                <Navigation size={12} /> Open Google Maps
-              </button>
-              <span className="text-xs text-[var(--text-secondary)]">- Drop a pin, tap Share, copy link</span>
-            </div>
-          </div>
-
-          {/* House Type */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-[var(--text)]">
-              House Type
-            </label>
-            <select
-              value={form.houseType}
-              onChange={(e) => update("houseType", e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition text-sm"
-            >
-              <option value="">Select...</option>
-              <option value="owned">Owned</option>
-              <option value="rent">Rent</option>
-            </select>
-          </div>
-
-          <PhotoUpload photos={photos} onPhotosChange={setPhotos} maxPhotos={4} />
-
-          <Textarea
-            label="Location Description"
-            placeholder="Blue gate beside the church, second house after the bridge..."
-            value={form.locationDesc}
-            onChange={(e) => update("locationDesc", e.target.value)}
-            rows={3}
-            hint="Optional but earns 3 points. Helps riders find you."
-          />
-
-          <div className="pt-4 border-t border-[var(--border)]">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-sm font-medium text-[var(--text)]">Household Members</p>
-                <p className="text-xs text-[var(--text-secondary)]">Everyone at your address with a phone. +3 pts if you add at least one.</p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {members.map((member, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="flex-1 grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Name"
-                      value={member.name}
-                      onChange={(e) => updateMember(i, "name", e.target.value)}
-                    />
-                    <Input
-                      placeholder="Phone"
-                      type="tel"
-                      value={member.phone}
-                      onChange={(e) => updateMember(i, "phone", e.target.value)}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeMember(i)}
-                    className="p-2 text-[var(--text-secondary)] hover:text-[var(--error)] hover:bg-red-50 rounded-lg transition shrink-0"
-                  >
-                    <X size={16} />
-                  </button>
+          <div className="flex justify-between mt-3">
+            {steps.map((s) => (
+              <div key={s.id} className={`flex flex-col items-center gap-1 ${currentStep >= s.id ? "text-[var(--primary)]" : "text-[var(--text-secondary)]"}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${currentStep > s.id ? "bg-[var(--primary)] text-white" : currentStep === s.id ? "bg-[var(--primary)]/10 text-[var(--primary)]" : "bg-gray-100 text-[var(--text-secondary)]"}`}>
+                  {currentStep > s.id ? <Check size={14} /> : s.id}
                 </div>
-              ))}
-
-              <button
-                type="button"
-                onClick={addMember}
-                className="flex items-center gap-2 text-sm text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium transition"
-              >
-                <Plus size={16} /> Add Member
-              </button>
-            </div>
+                <span className="text-[10px] hidden sm:block">{s.label}</span>
+              </div>
+            ))}
           </div>
+        </div>
 
-          <Button type="submit" loading={loading} className="w-full" size="lg">
-            {loading ? "Registering..." : "Register Household"}
-          </Button>
-        </form>
+        {/* Step Content */}
+        <div className="min-h-[400px]">
+          {renderStep()}
+        </div>
+
+        {/* Navigation */}
+        <div className="flex gap-3 mt-8">
+          {currentStep > 1 && (
+            <Button variant="secondary" onClick={prevStep} className="flex-1">
+              <ArrowLeft size={16} className="mr-2" /> Previous
+            </Button>
+          )}
+          {currentStep < steps.length ? (
+            <Button onClick={nextStep} disabled={!canProceed()} className="flex-1">
+              Next <ArrowRight size={16} className="ml-2" />
+            </Button>
+          ) : (
+            <Button onClick={handleSubmit} loading={loading} className="flex-1">
+              {loading ? "Registering..." : "Register Household"}
+            </Button>
+          )}
+        </div>
+
+        <p className="text-center text-xs text-[var(--text-secondary)] pt-6">
+          A Hashtag Dropee Initiative — eX Holdings
+        </p>
       </div>
     </main>
   );

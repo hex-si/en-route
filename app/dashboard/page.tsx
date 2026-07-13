@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users, Trophy, Copy, ArrowLeft, Star, Send, CheckCircle, Clock, XCircle, Phone, LogIn, AlertCircle, Camera, MessageCircle, Home } from "lucide-react";
+import { Users, Trophy, Copy, ArrowLeft, Star, Send, CheckCircle, Clock, XCircle, Phone, LogIn, AlertCircle, Camera, MessageCircle, Home, Check, Circle, ChevronRight, Share2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -30,6 +30,7 @@ interface UserData {
   household_registration_id: string | null;
   zone_id: string | null;
   area_id: string | null;
+  village_id: string | null;
 }
 
 interface HouseholdMember {
@@ -112,7 +113,6 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // Realtime household count subscription
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -133,7 +133,6 @@ export default function DashboardPage() {
       const q = query.trim();
       const isPhone = /^\+?\d+$/.test(q);
 
-      // 1. Search users (heads) first
       let userData = null;
       if (isPhone) {
         const { data } = await supabase.from("users").select("*").eq("phone", q).single();
@@ -143,7 +142,6 @@ export default function DashboardPage() {
         userData = data;
       }
 
-      // 2. If not found in users, check household_members — redirect to member dashboard
       if (!userData) {
         let memberData = null;
         if (isPhone) {
@@ -169,7 +167,6 @@ export default function DashboardPage() {
       setShowLoginForm(false);
       localStorage.setItem("en-route-phone", q);
 
-      // Fetch area name if user has area_id
       if (userData.area_id) {
         const { data: areaData } = await supabase.from("areas").select("name").eq("id", userData.area_id).single();
         setAreaName(areaData?.name || null);
@@ -186,7 +183,6 @@ export default function DashboardPage() {
       const { data: memberData2 } = await supabase.from("household_members").select("*").eq("user_id", userData.id).order("created_at");
       if (memberData2) setMembers(memberData2);
 
-      // Flag members who have requested independence (their promoted account has a pending request).
       const promotedIds = (memberData2 || []).filter((m) => m.promoted_user_id).map((m) => m.promoted_user_id);
       if (promotedIds.length > 0) {
         const { data: indepReqs } = await supabase
@@ -203,12 +199,9 @@ export default function DashboardPage() {
         setIndependencePendingMemberIds([]);
       }
 
-      // If this user was originally a household member of someone else, show the
-      // head's name and whether they've requested independence.
       if (userData.head_user_id) {
         const { data: headData } = await supabase.from("users").select("full_name").eq("id", userData.head_user_id).single();
         setHeadName(headData?.full_name || null);
-
         const { data: indepReq } = await supabase
           .from("update_requests")
           .select("id, status")
@@ -270,64 +263,20 @@ export default function DashboardPage() {
     try {
       const supabase = createClient();
       const zoneName = zoneInput.trim();
-
-      // Find or create zone
-      let { data: zone } = await supabase
-        .from("zones")
-        .select("id")
-        .eq("name", zoneName)
-        .single();
-
+      let { data: zone } = await supabase.from("zones").select("id").eq("name", zoneName).single();
       if (!zone) {
-        const prefix = zoneName
-          .split(/\s+/)
-          .map((w: string) => w[0])
-          .join("")
-          .toUpperCase()
-          .slice(0, 3);
-        const { data: newZone } = await supabase
-          .from("zones")
-          .insert({ name: zoneName, prefix })
-          .select("id")
-          .single();
+        const prefix = zoneName.split(/\s+/).map((w: string) => w[0]).join("").toUpperCase().slice(0, 3);
+        const { data: newZone } = await supabase.from("zones").insert({ name: zoneName, prefix }).select("id").single();
         zone = newZone;
       }
-
-      if (!zone) {
-        toast.error("Failed to create zone");
-        setSavingZone(false);
-        return;
-      }
-
-      // Generate household registration ID
-      const { data: regId, error: regIdError } = await supabase.rpc(
-        "generate_household_registration_id",
-        { zone_uuid: zone.id, area_uuid: null }
-      );
-      if (regIdError) {
-        toast.error("Failed to generate ID");
-        setSavingZone(false);
-        return;
-      }
-
-      // Update user
-      const { error } = await supabase
-        .from("users")
-        .update({ zone_id: zone.id, household_registration_id: regId })
-        .eq("id", user.id);
-      if (error) {
-        toast.error("Failed to save");
-        setSavingZone(false);
-        return;
-      }
-
+      if (!zone) { toast.error("Failed to create zone"); setSavingZone(false); return; }
+      const { data: regId, error: regIdError } = await supabase.rpc("generate_household_registration_id", { zone_uuid: zone.id, area_uuid: null });
+      if (regIdError) { toast.error("Failed to generate ID"); setSavingZone(false); return; }
+      const { error } = await supabase.from("users").update({ zone_id: zone.id, household_registration_id: regId }).eq("id", user.id);
+      if (error) { toast.error("Failed to save"); setSavingZone(false); return; }
       setUser((u) => u ? { ...u, zone_id: zone.id, household_registration_id: regId } : null);
       toast.success("Zone and Household ID saved!");
-    } catch {
-      toast.error("Something went wrong");
-    } finally {
-      setSavingZone(false);
-    }
+    } catch { toast.error("Something went wrong"); } finally { setSavingZone(false); }
   };
 
   const handleRequestIndependence = async () => {
@@ -336,18 +285,12 @@ export default function DashboardPage() {
     try {
       const supabase = createClient();
       const { error } = await supabase.from("update_requests").insert({
-        user_id: user.id,
-        field: "independent_household",
-        new_value: "I would like to manage my own independent household.",
+        user_id: user.id, field: "independent_household", new_value: "I would like to manage my own independent household.",
       });
       if (error) throw error;
       setPendingIndependence(true);
       toast.success("Independence request submitted");
-    } catch {
-      toast.error("Failed to submit request");
-    } finally {
-      setRequestingIndependence(false);
-    }
+    } catch { toast.error("Failed to submit request"); } finally { setRequestingIndependence(false); }
   };
 
   const copyReferralLink = () => {
@@ -394,33 +337,16 @@ export default function DashboardPage() {
       if (error) throw error;
       setUser((u) => u ? { ...u, photos: editPhotos } : null);
       toast.success("Photos updated");
-    } catch {
-      toast.error("Failed to save photos");
-    } finally {
-      setSavingPhotos(false);
-    }
+    } catch { toast.error("Failed to save photos"); } finally { setSavingPhotos(false); }
   };
 
   const handleRequestPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 1024 * 1024) {
-      toast.error("Image must be under 1MB");
-      return;
-    }
+    if (file.size > 1024 * 1024) { toast.error("Image must be under 1MB"); return; }
     const reader = new FileReader();
-    reader.onload = () => {
-      setRequestPhoto(reader.result as string);
-      setUpdateValue(`I want to upload a new photo: ${file.name}`);
-    };
+    reader.onload = () => { setRequestPhoto(reader.result as string); setUpdateValue(`I want to upload a new photo: ${file.name}`); };
     reader.readAsDataURL(file);
-  };
-
-  
-  const handleRequestMorePhotos = () => {
-    setUpdateField("photos");
-    setUpdateValue("I would like to add more house photos beyond the 4-photo limit.");
-    document.getElementById("update-request-section")?.scrollIntoView({ behavior: "smooth" });
   };
 
   const handleSubmitUpdate = async (e: React.FormEvent) => {
@@ -429,27 +355,15 @@ export default function DashboardPage() {
     setSubmittingUpdate(true);
     try {
       const supabase = createClient();
-      const payload: Record<string, unknown> = {
-        user_id: user.id,
-        field: updateField,
-        new_value: updateValue.trim(),
-      };
-      if (updateField === "photos" && requestPhoto) {
-        payload.image_data = requestPhoto;
-      }
+      const payload: Record<string, unknown> = { user_id: user.id, field: updateField, new_value: updateValue.trim() };
+      if (updateField === "photos" && requestPhoto) payload.image_data = requestPhoto;
       const { error } = await supabase.from("update_requests").insert(payload);
       if (error) throw error;
       toast.success("Update request submitted");
-      setUpdateField("");
-      setUpdateValue("");
-      setRequestPhoto(null);
+      setUpdateField(""); setUpdateValue(""); setRequestPhoto(null);
       const { data: reqData } = await supabase.from("update_requests").select("id, field, new_value, status, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10);
       if (reqData) setRequests(reqData);
-    } catch {
-      toast.error("Failed to submit");
-    } finally {
-      setSubmittingUpdate(false);
-    }
+    } catch { toast.error("Failed to submit"); } finally { setSubmittingUpdate(false); }
   };
 
   // Login Form
@@ -466,23 +380,12 @@ export default function DashboardPage() {
               <p className="text-sm text-[var(--text-secondary)]">Enter your phone number or name to access your account</p>
             </div>
             <form onSubmit={handleLogin} className="space-y-3">
-              <Input
-                placeholder="Phone number or full name"
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(e.target.value)}
-              />
-              <Button type="submit" loading={loading} className="w-full" size="lg">
-                <LogIn size={16} className="mr-2" /> Access Dashboard
-              </Button>
+              <Input placeholder="Phone number or full name" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} />
+              <Button type="submit" loading={loading} className="w-full" size="lg"><LogIn size={16} className="mr-2" /> Access Dashboard</Button>
             </form>
             <div className="mt-4 text-center space-y-2">
-              <Link href="/check" className="text-sm text-[var(--text-secondary)] hover:text-[var(--primary)]">
-                Check registration status
-              </Link>
-              <p className="text-xs text-[var(--text-secondary)]">
-                Not registered?{" "}
-                <Link href="/register" className="text-[var(--primary)] hover:underline">Register now</Link>
-              </p>
+              <Link href="/check" className="text-sm text-[var(--text-secondary)] hover:text-[var(--primary)]">Check registration status</Link>
+              <p className="text-xs text-[var(--text-secondary)]">Not registered? <Link href="/register" className="text-[var(--primary)] hover:underline">Register now</Link></p>
             </div>
           </CardContent>
         </Card>
@@ -501,12 +404,8 @@ export default function DashboardPage() {
   if (!user) return null;
 
   const breakdown = getPointsBreakdown({
-    fullName: user.full_name,
-    phone: user.phone,
-    mapsLink: user.maps_link,
-    photos: user.photos || [],
-    locationDesc: user.location_desc || "",
-    hasFamilyMember: members.length > 0,
+    fullName: user.full_name, phone: user.phone, mapsLink: user.maps_link,
+    photos: user.photos || [], locationDesc: user.location_desc || "", hasFamilyMember: members.length > 0,
   });
 
   const houseTypeLabel = user.house_type === "owned" ? "Owned" : user.house_type === "rent" ? "Rented" : null;
@@ -521,9 +420,7 @@ export default function DashboardPage() {
             </button>
             <h1 className="text-xl font-bold">Dashboard</h1>
           </div>
-          <button onClick={handleLogout} className="text-xs text-[var(--text-secondary)] hover:text-[var(--error)]">
-            Logout
-          </button>
+          <button onClick={handleLogout} className="text-xs text-[var(--text-secondary)] hover:text-[var(--error)]">Logout</button>
         </div>
 
         {/* Hero Stats */}
@@ -539,15 +436,12 @@ export default function DashboardPage() {
               </span>
             )}
           </div>
-          {/* Household Registration ID */}
           {user.household_registration_id ? (
             <div className="bg-white/15 rounded-xl px-4 py-2.5 mb-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-white/70">Household Registration ID</p>
                 <p className="text-lg font-mono font-bold tracking-wider">{user.household_registration_id}</p>
-                {areaName && (
-                  <p className="text-[10px] text-white/50 mt-0.5">Area: {areaName}</p>
-                )}
+                {areaName && <p className="text-[10px] text-white/50 mt-0.5">Area: {areaName}</p>}
               </div>
               <Home size={20} className="text-white/60" />
             </div>
@@ -590,7 +484,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Zone Update Form — shown when user has no zone yet */}
+        {/* Zone Update Form */}
         {!user.zone_id && (
           <Card className="mb-6 border-[var(--primary)]/20">
             <CardContent className="py-4">
@@ -602,14 +496,8 @@ export default function DashboardPage() {
                   <p className="text-sm font-semibold text-[var(--text)] mb-1">Set Your Zone</p>
                   <p className="text-xs text-[var(--text-secondary)] mb-3">Enter your zone to get your Household Registration ID.</p>
                   <div className="flex gap-2">
-                    <Input
-                      placeholder="e.g. Phungreitang – East"
-                      value={zoneInput}
-                      onChange={(e) => setZoneInput(e.target.value)}
-                    />
-                    <Button size="sm" onClick={handleSaveZone} loading={savingZone} disabled={!zoneInput.trim()}>
-                      Save
-                    </Button>
+                    <Input placeholder="e.g. Phungreitang – East" value={zoneInput} onChange={(e) => setZoneInput(e.target.value)} />
+                    <Button size="sm" onClick={handleSaveZone} loading={savingZone} disabled={!zoneInput.trim()}>Save</Button>
                   </div>
                 </div>
               </div>
@@ -626,17 +514,11 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-blue-800 mb-1">Part of a household</p>
-                <p className="text-sm text-blue-700">
-                  You're registered under {headName ? maskName(headName) : "another"}'s household.
-                </p>
+                <p className="text-sm text-blue-700">You&apos;re registered under {headName ? maskName(headName) : "another"}&apos;s household.</p>
                 {pendingIndependence ? (
                   <p className="text-xs text-blue-600 mt-2 font-medium">Request to manage your own household is pending review.</p>
                 ) : (
-                  <button
-                    onClick={handleRequestIndependence}
-                    disabled={requestingIndependence}
-                    className="mt-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 px-3 py-1.5 rounded-lg transition"
-                  >
+                  <button onClick={handleRequestIndependence} disabled={requestingIndependence} className="mt-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 px-3 py-1.5 rounded-lg transition">
                     {requestingIndependence ? "Submitting..." : "Request Independent Household"}
                   </button>
                 )}
@@ -645,17 +527,55 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Progress */}
+        {/* Profile Completion Checklist */}
         <Card className="mb-6">
-          <CardContent>
-            <ProgressBar current={user.points} max={30} />
+          <CardHeader>
+            <h2 className="font-semibold text-sm flex items-center gap-2">
+              <CheckCircle size={16} className="text-[var(--primary)]" /> Profile Completion
+            </h2>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {breakdown.map((item) => (
+              <div key={item.label} className="flex items-center gap-3">
+                {item.earned ? (
+                  <div className="w-5 h-5 bg-[var(--primary)] rounded-full flex items-center justify-center shrink-0">
+                    <Check size={12} className="text-white" />
+                  </div>
+                ) : (
+                  <div className="w-5 h-5 border-2 border-gray-200 rounded-full shrink-0" />
+                )}
+                <span className={`text-sm flex-1 ${item.earned ? "text-[var(--text)]" : "text-[var(--text-secondary)]"}`}>{item.label}</span>
+                <span className={`text-xs ${item.earned ? "font-medium text-[var(--primary)]" : "text-[var(--text-secondary)]"}`}>+{item.points}</span>
+              </div>
+            ))}
+            {houseTypeLabel && (
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 bg-[var(--primary)] rounded-full flex items-center justify-center shrink-0">
+                  <Check size={12} className="text-white" />
+                </div>
+                <span className="text-sm text-[var(--text)] flex-1">House: {houseTypeLabel}</span>
+                <span className="text-xs text-[var(--text-secondary)]">info</span>
+              </div>
+            )}
+            <div className="pt-3 border-t border-[var(--border)] flex items-center justify-between">
+              <span className="text-sm font-semibold">Profile Score</span>
+              <span className="text-lg font-bold text-[var(--primary)]">{user.points}/30</span>
+            </div>
+            {referralCount > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">Referral Bonus</span>
+                <span className="text-lg font-bold text-[var(--primary)]">+{referralCount * 10}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Referral */}
+        {/* Referral Section */}
         <Card className="mb-6 border-[var(--primary)]/20">
           <CardHeader className="bg-[var(--primary)]/5">
-            <h2 className="font-semibold text-sm text-[var(--primary)]">Your Referral Link</h2>
+            <h2 className="font-semibold text-sm text-[var(--primary)] flex items-center gap-2">
+              <Share2 size={16} /> Share & Earn
+            </h2>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-[var(--text-secondary)]">Share with friends. Earn +10 points for each registration.</p>
@@ -665,59 +585,26 @@ export default function DashboardPage() {
               </code>
               <Button size="sm" onClick={copyReferralLink}><Copy size={14} /></Button>
             </div>
-            <button
-              onClick={shareReferralWhatsApp}
-              className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20BD5A] text-white py-3 rounded-xl text-sm font-medium transition active:scale-[0.98]"
-            >
+            <button onClick={shareReferralWhatsApp} className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20BD5A] text-white py-3 rounded-xl text-sm font-medium transition active:scale-[0.98]">
               <MessageCircle size={16} /> Share on WhatsApp
             </button>
           </CardContent>
         </Card>
 
-        {/* Points Breakdown */}
-        <Card className="mb-6">
-          <CardHeader><h2 className="font-semibold text-sm">Points Breakdown</h2></CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {breakdown.map((item) => (
-                <div key={item.label} className="flex items-center justify-between text-sm">
-                  <span className={item.earned ? "text-[var(--text)]" : "text-[var(--text-secondary)]"}>
-                    {item.earned ? "✓" : "○"} {item.label}
-                  </span>
-                  <span className={item.earned ? "font-medium text-[var(--primary)]" : "text-[var(--text-secondary)]"}>+{item.points}</span>
-                </div>
-              ))}
-              {houseTypeLabel && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-[var(--text)]">✓ House: {houseTypeLabel}</span>
-                  <span className="text-xs text-[var(--text-secondary)]">info</span>
-                </div>
-              )}
-              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between text-sm font-semibold">
-                <span>Profile Total</span>
-                <span className="text-[var(--primary)]">{user.points}/30</span>
-              </div>
-              {referralCount > 0 && (
-                <div className="flex items-center justify-between text-sm font-semibold">
-                  <span>Referral Bonus</span>
-                  <span className="text-[var(--primary)]">+{referralCount * 10}</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Household Members */}
         <Card className="mb-6">
-          <CardHeader><h2 className="font-semibold text-sm">Household Members ({members.length})</h2></CardHeader>
+          <CardHeader>
+            <h2 className="font-semibold text-sm flex items-center gap-2">
+              <Users size={16} /> Household Members ({members.length})
+            </h2>
+          </CardHeader>
           <CardContent className="space-y-3">
-            {/* Registered person */}
             <div className="flex items-center justify-between bg-[var(--primary)]/5 rounded-xl px-4 py-2.5 border border-[var(--primary)]/20">
               <div>
                 <p className="text-sm font-medium">{maskName(user.full_name)}</p>
                 <p className="text-xs text-[var(--text-secondary)]">{maskPhone(user.phone)} (You)</p>
               </div>
-              <span className="text-xs text-[var(--primary)] font-medium">Registered</span>
+              <span className="text-xs text-[var(--primary)] font-medium">Head</span>
             </div>
             {members.length > 0 ? (
               <div className="space-y-2">
@@ -738,16 +625,13 @@ export default function DashboardPage() {
             ) : (
               <p className="text-sm text-[var(--text-secondary)]">No members added yet.</p>
             )}
-            <button
-              onClick={() => { setUpdateField("add_member"); document.getElementById("update-request-section")?.scrollIntoView({ behavior: "smooth" }); }}
-              className="w-full flex items-center justify-center gap-2 text-xs text-[var(--primary)] bg-[var(--primary)]/5 rounded-xl py-2.5 hover:bg-[var(--primary)]/10 transition"
-            >
+            <button onClick={() => { setUpdateField("add_member"); document.getElementById("update-request-section")?.scrollIntoView({ behavior: "smooth" }); }} className="w-full flex items-center justify-center gap-2 text-xs text-[var(--primary)] bg-[var(--primary)]/5 rounded-xl py-2.5 hover:bg-[var(--primary)]/10 transition">
               <Send size={12} /> Request to add or remove members
             </button>
           </CardContent>
         </Card>
 
-        {/* Photos - Hidden, request only */}
+        {/* Photos */}
         {editPhotos.length > 0 && (
           <Card className="mb-6">
             <CardHeader>
@@ -767,43 +651,23 @@ export default function DashboardPage() {
           <CardHeader><h2 className="font-semibold text-sm">Request an Update</h2></CardHeader>
           <CardContent>
             <form onSubmit={handleSubmitUpdate} className="space-y-3">
-              <select
-                value={updateField}
-                onChange={(e) => setUpdateField(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition text-sm"
-              >
+              <select value={updateField} onChange={(e) => setUpdateField(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-white text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition text-sm">
                 <option value="">Select field to update...</option>
-                {updateFields.map((f) => (
-                  <option key={f.key} value={f.key}>{f.label}</option>
-                ))}
+                {updateFields.map((f) => (<option key={f.key} value={f.key}>{f.label}</option>))}
               </select>
               {updateField && (
                 <>
                   {updateField === "photos" ? (
                     <div className="space-y-3">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleRequestPhotoUpload}
-                        className="hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-8 rounded-xl border-2 border-dashed border-[var(--border)] hover:border-[var(--primary)] text-[var(--text-secondary)] hover:text-[var(--primary)] transition"
-                      >
+                      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleRequestPhotoUpload} className="hidden" />
+                      <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-8 rounded-xl border-2 border-dashed border-[var(--border)] hover:border-[var(--primary)] text-[var(--text-secondary)] hover:text-[var(--primary)] transition">
                         <Camera size={20} />
                         <span className="text-sm">{requestPhoto ? "Change photo" : "Tap to upload photo"}</span>
                       </button>
                       {requestPhoto && (
                         <div className="relative">
                           <img src={requestPhoto} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
-                          <button
-                            type="button"
-                            onClick={() => { setRequestPhoto(null); setUpdateValue(""); }}
-                            className="absolute top-2 right-2 p-1 bg-black/50 rounded-full text-white text-xs"
-                          >✕</button>
+                          <button type="button" onClick={() => { setRequestPhoto(null); setUpdateValue(""); }} className="absolute top-2 right-2 p-1 bg-black/50 rounded-full text-white text-xs">✕</button>
                         </div>
                       )}
                       <p className="text-xs text-[var(--text-secondary)]">Max 1MB. Admin will review and upload.</p>
@@ -847,7 +711,7 @@ export default function DashboardPage() {
 
         {/* Leaderboard */}
         {leaderboard.length > 0 && (
-          <Card>
+          <Card className="mb-6">
             <CardHeader>
               <h2 className="font-semibold text-sm flex items-center gap-2">
                 <Trophy size={16} className="text-amber-500" /> Top Referrers
@@ -877,5 +741,3 @@ export default function DashboardPage() {
     </main>
   );
 }
-
-
