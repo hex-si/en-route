@@ -135,25 +135,26 @@ export default function RegisterPage() {
         if (referrer) referredBy = referrer.id;
       }
 
-      const { data: user, error: userError } = await supabase.from("users").insert({
+      const insertData: Record<string, unknown> = {
         full_name: form.fullName,
         phone: form.phone,
-        maps_link: form.mapsLink || null,
-        location: form.location.trim(),
-        location_desc: form.locationDesc || null,
+        location_desc: form.location.trim(),
         house_type: form.houseType || null,
         photos,
         points,
         referral_code: referralCode,
         referred_by: referredBy,
-        mapping_project_id: selectedProject?.id || null,
-        latitude: form.latitude ? parseFloat(form.latitude) : null,
-        longitude: form.longitude ? parseFloat(form.longitude) : null,
-      }).select("id").single();
+      };
+      if (form.mapsLink.trim()) insertData.maps_link = form.mapsLink.trim();
+      if (form.latitude) insertData.latitude = parseFloat(form.latitude);
+      if (form.longitude) insertData.longitude = parseFloat(form.longitude);
+      if (selectedProject?.id) insertData.mapping_project_id = selectedProject.id;
+
+      const { data: user, error: userError } = await supabase.from("users").insert(insertData).select("id").single();
 
       if (userError) {
         if (userError.code === "23505") { toast.error("This phone number is already registered"); }
-        else { toast.error("Registration failed. Please try again."); }
+        else { toast.error(`Registration failed: ${userError.message}`); }
         return;
       }
 

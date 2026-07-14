@@ -5,21 +5,28 @@ import { phonesMatch } from "@/lib/phone";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { full_name, phone, maps_link, location_desc, house_type, photos, points, referral_code, referred_by, members } = body;
+    const { full_name, phone, maps_link, location, location_desc, house_type, photos, points, referral_code, referred_by, members, mapping_project_id, latitude, longitude } = body;
 
-    if (!full_name || !phone || !maps_link) {
+    if (!full_name || !phone) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     const supabase = createAdminClient();
 
+    const insertData: Record<string, unknown> = {
+      full_name, phone,
+      location_desc: location || location_desc || null,
+      house_type, photos: photos || [], points: points || 0,
+      referral_code, referred_by,
+    };
+    if (maps_link) insertData.maps_link = maps_link;
+    if (latitude) insertData.latitude = latitude;
+    if (longitude) insertData.longitude = longitude;
+    if (mapping_project_id) insertData.mapping_project_id = mapping_project_id;
+
     const { data: user, error: userError } = await supabase
       .from("users")
-      .insert({
-        full_name, phone, maps_link, location_desc, house_type,
-        photos: photos || [], points: points || 0,
-        referral_code, referred_by,
-      })
+      .insert(insertData)
       .select("id")
       .single();
 
