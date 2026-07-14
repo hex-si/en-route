@@ -15,7 +15,8 @@ export async function POST(request: Request) {
 
     const insertData: Record<string, unknown> = {
       full_name, phone,
-      location_desc: location || location_desc || null,
+      location: location || null,
+      location_desc: location_desc || null,
       house_type, photos: photos || [], points: points || 0,
       referral_code, referred_by,
     };
