@@ -251,7 +251,7 @@ export default function AdminUpdatesPage() {
             {updates.map((update) => (
               <div key={update.id} className="bg-white rounded-2xl border border-[var(--border)] overflow-hidden">
                 {update.image_data && (
-                  <img src={update.image_data} alt={update.title} className="w-full h-32 object-cover" />
+                  <img src={update.image_data} alt={update.title} loading="lazy" decoding="async" className="w-full h-32 object-cover" />
                 )}
                 <div className="p-4">
                   <div className="flex items-start justify-between gap-2">

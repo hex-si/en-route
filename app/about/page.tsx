@@ -62,6 +62,10 @@ export default function AboutPage() {
           <Link href="/privacy" className="text-[var(--text-secondary)] hover:text-[var(--primary)] transition">
             Privacy & Policy
           </Link>
+          <span className="text-[var(--border)]">|</span>
+          <a href="https://whatsapp.com/channel/0029Vb42kD0HFxPA8UGJRF3i" target="_blank" rel="noopener noreferrer" className="text-[var(--text-secondary)] hover:text-green-600 transition">
+            WhatsApp Channel
+          </a>
         </div>
       </div>
     </main>

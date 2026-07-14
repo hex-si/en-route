@@ -102,6 +102,7 @@ export function AdBanner({ position }: { position: "landing" | "dashboard" }) {
                 muted
                 loop
                 playsInline
+                preload="none"
                 onPlay={() => setVideoPlaying(true)}
                 onPause={() => setVideoPlaying(false)}
               />
@@ -113,9 +114,9 @@ export function AdBanner({ position }: { position: "landing" | "dashboard" }) {
               </button>
             </>
           ) : ad.image_data ? (
-            <img src={ad.image_data} alt={ad.title} className="w-full h-52 object-cover" />
+            <img src={ad.image_data} alt={ad.title} loading="lazy" decoding="async" className="w-full h-52 object-cover" />
           ) : ad.image_url ? (
-            <img src={ad.image_url} alt={ad.title} className="w-full h-52 object-cover" />
+            <img src={ad.image_url} alt={ad.title} loading="lazy" decoding="async" className="w-full h-52 object-cover" />
           ) : null}
         </div>
 

@@ -67,7 +67,7 @@ export default function UpdatesPage() {
               >
                 {update.image_data && (
                   <div className="relative">
-                    <img src={update.image_data} alt={update.title} className="w-full h-48 object-cover" />
+                    <img src={update.image_data} alt={update.title} loading="lazy" decoding="async" className="w-full h-48 object-cover" />
                     <button
                       onClick={() => setViewerUpdate(update)}
                       className="absolute bottom-2 right-2 bg-black/60 text-white p-2 rounded-full hover:bg-black/80 transition"

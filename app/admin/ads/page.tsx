@@ -289,7 +289,7 @@ export default function AdminAdsPage() {
                   <a href={ad.link_url} target="_blank" rel="noopener noreferrer" className="truncate hover:text-[var(--primary)]">{ad.link_url}</a>
                 </div>
                 {ad.image_url ? (
-                  <img src={ad.image_url} alt={ad.title} className="w-full h-32 object-cover rounded-lg border border-[var(--border)] mb-3" />
+                    <img src={ad.image_url} alt={ad.title} loading="lazy" decoding="async" className="w-full h-32 object-cover rounded-lg border border-[var(--border)] mb-3" />
                 ) : null}
                 <div className="flex gap-2">
                   <Button size="sm" variant="secondary" onClick={() => toggleActive(ad.id, ad.is_active)}>

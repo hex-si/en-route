@@ -462,7 +462,7 @@ export default function AdminUserDetailPage() {
               <div className="grid grid-cols-2 gap-2">
                 {user.photos.map((photo, i) => (
                   <a key={i} href={photo} target="_blank" rel="noopener noreferrer">
-                    <img src={photo} alt={`Photo ${i + 1}`} className="w-full aspect-square object-cover rounded-xl border border-[var(--border)]" />
+                    <img src={photo} alt={`Photo ${i + 1}`} loading="lazy" decoding="async" className="w-full aspect-square object-cover rounded-xl border border-[var(--border)]" />
                   </a>
                 ))}
               </div>

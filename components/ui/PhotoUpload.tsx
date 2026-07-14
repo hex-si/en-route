@@ -50,6 +50,8 @@ export function PhotoUpload({ photos, onPhotosChange, maxPhotos = 4, hideByDefau
             <img
               src={photo}
               alt={`Photo ${i + 1}`}
+              loading="lazy"
+              decoding="async"
               className={`w-full h-full object-cover transition ${hideByDefault ? "blur-md hover:blur-none" : ""}`}
             />
             <button
