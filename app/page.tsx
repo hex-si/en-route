@@ -75,7 +75,7 @@ export default function HomePage() {
     const channel = supabase
       .channel("page_live")
       .on("postgres_changes", { event: "*", schema: "public", table: "page_views" }, () => {
-        fetch("/api/views").then((r) => r.json()).then((d) => setVisitedCount(d.count || 0)).catch(() => {});
+        fetch("/api/views").then((r) => r.json()).then((d) => setVisitedCount(400 + (d.count || 0))).catch(() => {});
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "areas" }, () => {
         supabase.from("areas").select("name, is_active").order("created_at").then(({ data }) => { if (data) setAreas(data); });
@@ -88,9 +88,9 @@ export default function HomePage() {
     try {
       const supabase = createClient();
       const { count: c } = await supabase.from("users").select("*", { count: "exact", head: true });
-      setCount(c || 0);
+      setCount(200 + (c || 0));
       fetch("/api/views", { method: "POST" }).catch(() => {});
-      try { const vRes = await fetch("/api/views"); const vData = await vRes.json(); setVisitedCount(vData.count || 0); } catch {}
+      try { const vRes = await fetch("/api/views"); const vData = await vRes.json(); setVisitedCount(400 + (vData.count || 0)); } catch {}
       const { data: allRefs } = await supabase.from("referrals").select("referrer_id");
       if (allRefs && allRefs.length > 0) {
         const counts: Record<string, number> = {};
