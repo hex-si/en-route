@@ -172,13 +172,23 @@ export default function RegisterPage() {
 
       try {
         const { data: zones } = await supabase.from("zones").select("id, name");
-        if (zones && zones.length > 0 && form.location.trim()) {
-          const loc = form.location.trim().toLowerCase();
-          const matchedZone = zones.find((z) => loc.includes(z.name.toLowerCase()) || z.name.toLowerCase().includes(loc));
-          if (matchedZone) {
-            const { data: regId } = await supabase.rpc("generate_household_registration_id", { zone_uuid: matchedZone.id, area_uuid: null });
+        const loc = form.location.trim();
+        if (loc) {
+          let zoneToUse: { id: string } | null = null;
+          if (zones && zones.length > 0) {
+            const locLower = loc.toLowerCase();
+            const matched = zones.find((z) => locLower.includes(z.name.toLowerCase()) || z.name.toLowerCase().includes(locLower));
+            if (matched) zoneToUse = matched;
+          }
+          if (!zoneToUse) {
+            const prefix = loc.split(/\s+/).map((w) => w[0]).join("").toUpperCase().slice(0, 3);
+            const { data: newZone } = await supabase.from("zones").insert({ name: loc, prefix }).select("id").single();
+            if (newZone) zoneToUse = newZone;
+          }
+          if (zoneToUse) {
+            const { data: regId } = await supabase.rpc("generate_household_registration_id", { zone_uuid: zoneToUse.id, area_uuid: null });
             if (regId) {
-              await supabase.from("users").update({ zone_id: matchedZone.id, household_registration_id: regId }).eq("id", user.id);
+              await supabase.from("users").update({ zone_id: zoneToUse.id, household_registration_id: regId, location: loc }).eq("id", user.id);
             }
           }
         }

@@ -71,6 +71,29 @@ export async function POST(request: Request) {
       }
     }
 
+    // Auto-generate household registration ID from location
+    const loc = (location || location_desc || "").trim();
+    if (loc) {
+      const { data: zones } = await supabase.from("zones").select("id, name");
+      let zoneToUse: { id: string } | null = null;
+      if (zones && zones.length > 0) {
+        const locLower = loc.toLowerCase();
+        const matched = zones.find((z) => locLower.includes(z.name.toLowerCase()) || z.name.toLowerCase().includes(locLower));
+        if (matched) zoneToUse = matched;
+      }
+      if (!zoneToUse) {
+        const prefix = loc.split(/\s+/).map((w: string) => w[0]).join("").toUpperCase().slice(0, 3);
+        const { data: newZone } = await supabase.from("zones").insert({ name: loc, prefix }).select("id").single();
+        if (newZone) zoneToUse = newZone;
+      }
+      if (zoneToUse) {
+        const { data: regId } = await supabase.rpc("generate_household_registration_id", { zone_uuid: zoneToUse.id, area_uuid: null });
+        if (regId) {
+          await supabase.from("users").update({ zone_id: zoneToUse.id, household_registration_id: regId, location: loc }).eq("id", user.id);
+        }
+      }
+    }
+
     return NextResponse.json({ ok: true, userId: user.id });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
