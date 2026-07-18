@@ -323,14 +323,14 @@ export default function AdminUserDetailPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-xl font-bold">{user.full_name}</h1>
+          <h1 className="text-xl lg:text-2xl font-bold">{user.full_name}</h1>
           <p className="text-sm text-[var(--text-secondary)]">{user.phone}</p>
           {user.household_registration_id && (
             <p className="text-sm font-mono font-medium text-[var(--primary)] mt-1">ID: {user.household_registration_id}</p>
           )}
           {zoneName && <p className="text-xs text-[var(--text-secondary)] mt-0.5">Zone: {zoneName}{areaName ? ` > ${areaName}` : ""}</p>}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${status.color}`}>
             <StatusIcon size={14} /> {status.label}
           </span>
@@ -417,30 +417,55 @@ export default function AdminUserDetailPage() {
       )}
 
       {activeTab === "location" && (
-        <Card>
-          <CardHeader><h2 className="font-semibold text-sm">Location</h2></CardHeader>
-          <CardContent className="space-y-4">
-            {user.location && (
-              <div><p className="text-xs text-[var(--text-secondary)] mb-1">Location</p><p className="text-sm font-medium">{user.location}</p></div>
-            )}
-            <div>
-              <p className="text-xs text-[var(--text-secondary)] mb-1">Google Maps Link</p>
-              {user.maps_link ? (
-                <a href={user.maps_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-[var(--primary)] hover:underline">
-                  Open in Maps <ExternalLink size={12} />
-                </a>
-              ) : (
-                <p className="text-sm text-[var(--text-secondary)]">Not set</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader><h2 className="font-semibold text-sm">Location Details</h2></CardHeader>
+            <CardContent className="space-y-4">
+              {user.location && (
+                <div><p className="text-xs text-[var(--text-secondary)] mb-1">Location</p><p className="text-sm font-medium">{user.location}</p></div>
               )}
-            </div>
-            {(user.latitude || user.longitude) && (
-              <div><p className="text-xs text-[var(--text-secondary)] mb-1">Coordinates</p><p className="text-sm font-mono">{user.latitude}, {user.longitude}</p></div>
-            )}
-            {user.location_desc && (
-              <div><p className="text-xs text-[var(--text-secondary)] mb-1">Description</p><p className="text-sm">{user.location_desc}</p></div>
-            )}
-          </CardContent>
-        </Card>
+              {user.location_desc && (
+                <div><p className="text-xs text-[var(--text-secondary)] mb-1">Description</p><p className="text-sm">{user.location_desc}</p></div>
+              )}
+              <div>
+                <p className="text-xs text-[var(--text-secondary)] mb-1">Google Maps Link</p>
+                {user.maps_link ? (
+                  <a href={user.maps_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-[var(--primary)] hover:underline">
+                    Open in Maps <ExternalLink size={12} />
+                  </a>
+                ) : (
+                  <p className="text-sm text-[var(--text-secondary)]">Not set</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><h2 className="font-semibold text-sm">Coordinates</h2></CardHeader>
+            <CardContent className="space-y-4">
+              {(user.latitude || user.longitude) ? (
+                <>
+                  <div><p className="text-xs text-[var(--text-secondary)] mb-1">Latitude</p><p className="text-sm font-mono">{user.latitude}</p></div>
+                  <div><p className="text-xs text-[var(--text-secondary)] mb-1">Longitude</p><p className="text-sm font-mono">{user.longitude}</p></div>
+                  <div className="w-full h-64 bg-gray-200 rounded-xl overflow-hidden">
+                    <iframe
+                      width="100%"
+                      height="100%"
+                      loading="lazy"
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${user.longitude! - 0.01},${user.latitude! - 0.01},${user.longitude! + 0.01},${user.latitude! + 0.01}&layer=mapnik&marker=${user.latitude},${user.longitude}`}
+                      className="border-0"
+                      title="User Location"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8 text-[var(--text-secondary)]">
+                  <MapPin size={24} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No coordinates set</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === "photos" && (
@@ -459,7 +484,7 @@ export default function AdminUserDetailPage() {
             {!showPhotos ? (
               <p className="text-sm text-[var(--text-secondary)]">{user.photos?.length || 0} photo(s) hidden for privacy</p>
             ) : user.photos && user.photos.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {user.photos.map((photo, i) => (
                   <a key={i} href={photo} target="_blank" rel="noopener noreferrer">
                     <img src={photo} alt={`Photo ${i + 1}`} loading="lazy" decoding="async" className="w-full aspect-square object-cover rounded-xl border border-[var(--border)]" />
@@ -502,14 +527,14 @@ export default function AdminUserDetailPage() {
           <CardHeader><h2 className="font-semibold text-sm">Update Requests ({userRequests.length})</h2></CardHeader>
           <CardContent>
             {userRequests.length > 0 ? (
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
                 {userRequests.map((req) => (
                   <div key={req.id} className="flex items-center justify-between text-sm bg-gray-50 rounded-xl px-4 py-2.5">
-                    <div>
+                    <div className="min-w-0 flex-1 mr-3">
                       <p className="font-medium">{req.field.replace(/_/g, " ")}</p>
-                      <p className="text-xs text-[var(--text-secondary)] truncate max-w-[200px]">{req.new_value}</p>
+                      <p className="text-xs text-[var(--text-secondary)] truncate">{req.new_value}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${req.status === "approved" ? "text-green-600 bg-green-50" : req.status === "rejected" ? "text-red-600 bg-red-50" : "text-yellow-600 bg-yellow-50"}`}>
                         {req.status === "approved" ? <CheckCircle size={10} /> : req.status === "rejected" ? <X size={10} /> : <Clock size={10} />} {req.status}
                       </span>
@@ -528,7 +553,7 @@ export default function AdminUserDetailPage() {
           <CardHeader><h2 className="font-semibold text-sm">Referrals ({referrals.length})</h2></CardHeader>
           <CardContent>
             {referrals.length > 0 ? (
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
                 {referrals.map((ref) => (
                   <div key={ref.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5">
                     <div>
@@ -556,11 +581,11 @@ export default function AdminUserDetailPage() {
                 {activityLog.map((act) => (
                   <div key={act.id} className="flex items-start gap-3">
                     <div className="w-2 h-2 rounded-full bg-[var(--primary)] mt-2 shrink-0" />
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{act.action}</p>
                       <p className="text-xs text-[var(--text-secondary)]">{act.details}</p>
-                      <p className="text-[10px] text-[var(--text-secondary)]">{new Date(act.created_at).toLocaleString()}</p>
                     </div>
+                    <p className="text-[10px] text-[var(--text-secondary)] shrink-0">{new Date(act.created_at).toLocaleString()}</p>
                   </div>
                 ))}
               </div>
@@ -629,19 +654,19 @@ export default function AdminUserDetailPage() {
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-5" onClick={() => setEditing(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="relative bg-white rounded-2xl w-full max-w-lg lg:max-w-2xl p-5 shadow-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-base">Edit User</h3>
               <button onClick={() => setEditing(false)} className="p-1 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
             </div>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Full Name</label><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" /></div>
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Phone</label><input type="text" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" /></div>
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Google Maps Link</label><input type="text" value={editMapsLink} onChange={(e) => setEditMapsLink(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" /></div>
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Location</label><input type="text" value={editLocation} onChange={(e) => setEditLocation(e.target.value)} placeholder="e.g. Phungreitang East" className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" /></div>
-              <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Location Description</label><textarea value={editLocationDesc} onChange={(e) => setEditLocationDesc(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 resize-none" /></div>
+              <div className="lg:col-span-2"><label className="text-xs text-[var(--text-secondary)] mb-1 block">Location Description</label><textarea value={editLocationDesc} onChange={(e) => setEditLocationDesc(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 resize-none" /></div>
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">House Type</label><select value={editHouseType} onChange={(e) => setEditHouseType(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 bg-white"><option value="">Not set</option><option value="owned">Owned</option><option value="rent">Rented</option></select></div>
-              <div className="border-t border-[var(--border)] pt-3 mt-3"><p className="text-xs font-medium text-[var(--text)] mb-2">Zone & Registration</p></div>
+              <div className="lg:col-span-2 border-t border-[var(--border)] pt-3 mt-3"><p className="text-xs font-medium text-[var(--text)] mb-2">Zone & Registration</p></div>
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Zone</label><select value={editZoneId} onChange={async (e) => { setEditZoneId(e.target.value); setEditNewZoneName(""); setEditAreaId(""); if (e.target.value) { try { const { createClient } = await import("@/lib/supabase/client"); const supabase = createClient(); const { data } = await supabase.from("areas").select("id, name, code").eq("zone_id", e.target.value).order("name"); if (data) setEditAreas(data); else setEditAreas([]); } catch { setEditAreas([]); } } else { setEditAreas([]); } }} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 bg-white"><option value="">No zone</option>{zones.map((z) => (<option key={z.id} value={z.id}>{z.name}</option>))}</select></div>
               {editAreas.length > 0 && (<div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Area</label><select value={editAreaId} onChange={(e) => setEditAreaId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 bg-white"><option value="">No subdivision</option>{editAreas.map((a) => (<option key={a.id} value={a.id}>{a.name} ({a.code})</option>))}</select></div>)}
               <div><label className="text-xs text-[var(--text-secondary)] mb-1 block">Or Create New Zone</label><input type="text" value={editNewZoneName} onChange={(e) => { setEditNewZoneName(e.target.value); setEditZoneId(""); }} placeholder="e.g. Phungreitang – East" className="w-full px-3 py-2 rounded-lg border border-[var(--border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" /></div>

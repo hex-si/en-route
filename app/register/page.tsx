@@ -170,6 +170,20 @@ export default function RegisterPage() {
         await supabase.from("household_members").update({ promoted_user_id: user.id }).eq("id", linkedMember.id);
       }
 
+      try {
+        const { data: zones } = await supabase.from("zones").select("id, name");
+        if (zones && zones.length > 0 && form.location.trim()) {
+          const loc = form.location.trim().toLowerCase();
+          const matchedZone = zones.find((z) => loc.includes(z.name.toLowerCase()) || z.name.toLowerCase().includes(loc));
+          if (matchedZone) {
+            const { data: regId } = await supabase.rpc("generate_household_registration_id", { zone_uuid: matchedZone.id, area_uuid: null });
+            if (regId) {
+              await supabase.from("users").update({ zone_id: matchedZone.id, household_registration_id: regId }).eq("id", user.id);
+            }
+          }
+        }
+      } catch {}
+
       const pointEntries = [];
       if (form.fullName) pointEntries.push({ user_id: user.id, amount: 5, reason: "registration: full_name" });
       if (form.phone) pointEntries.push({ user_id: user.id, amount: 5, reason: "registration: phone" });
